@@ -1,0 +1,9 @@
+[package]
+name = "extract-pps"
+version = "0.1.0"
+authors = ["Daniël de Kok <me@danieldk.eu>"]
+
+[dependencies]
+conllx = { path = "../conllx-rs" }
+getopts = "0.2"
+petgraph = "0.2"
