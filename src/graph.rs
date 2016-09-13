@@ -8,9 +8,7 @@ pub enum Weight<'a> {
     Precedence,
 }
 
-pub fn sentence_to_graph(sentence: &Sentence,
-                         projective: bool)
-                         -> Graph<&Token, Weight, Directed> {
+pub fn sentence_to_graph(sentence: &Sentence, projective: bool) -> Graph<&Token, Weight, Directed> {
     let mut g = Graph::new();
 
     let nodes: Vec<_> = sentence.iter().map(|token| g.add_node(token)).collect();
