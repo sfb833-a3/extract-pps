@@ -3,21 +3,29 @@ use conllx::{Sentence, Token};
 use petgraph::{Directed, Graph};
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum Weight<'a> {
+pub enum DependencyEdge<'a> {
     Relation(Option<&'a str>),
     Precedence,
 }
 
-pub type DependencyGraph<'a> = Graph<&'a Token, Weight<'a>, Directed>;
+pub struct DependencyNode<'a> {
+    pub token: &'a Token,
+    pub offset: usize
+}
+
+pub type DependencyGraph<'a> = Graph<DependencyNode<'a>, DependencyEdge<'a>, Directed>;
 
 pub fn sentence_to_graph(sentence: &Sentence, projective: bool) -> DependencyGraph {
     let mut g = Graph::new();
 
-    let nodes: Vec<_> = sentence.iter().map(|token| g.add_node(token)).collect();
+    let nodes: Vec<_> = sentence.iter()
+        .enumerate()
+        .map(|(offset, token)| g.add_node(DependencyNode{token: token, offset: offset}))
+        .collect();
 
     for (idx, token) in sentence.iter().enumerate() {
         if idx > 0 {
-            g.add_edge(nodes[idx - 1], nodes[idx], Weight::Precedence);
+            g.add_edge(nodes[idx - 1], nodes[idx], DependencyEdge::Precedence);
         }
 
         let head = if projective {
@@ -34,7 +42,7 @@ pub fn sentence_to_graph(sentence: &Sentence, projective: bool) -> DependencyGra
 
         if let Some(head) = head {
             if head != 0 {
-                g.add_edge(nodes[head - 1], nodes[idx], Weight::Relation(rel));
+                g.add_edge(nodes[head - 1], nodes[idx], DependencyEdge::Relation(rel));
             }
         }
     }

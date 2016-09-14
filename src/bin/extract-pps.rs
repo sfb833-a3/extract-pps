@@ -7,7 +7,7 @@ use std::process;
 use std::env::args;
 
 use conllx::{Features, Token};
-use extract_pps::{DependencyGraph, Weight, or_exit, or_stdin, sentence_to_graph};
+use extract_pps::{DependencyGraph, DependencyEdge, or_exit, or_stdin, sentence_to_graph};
 use getopts::Options;
 use petgraph::EdgeDirection;
 
@@ -65,19 +65,19 @@ fn main() {
 
 fn print_pps(graph: &DependencyGraph, lemma: bool) {
     for edge in graph.raw_edges() {
-        if edge.weight == Weight::Relation(Some(PP_RELATION)) {
-            let head = graph[edge.source()];
-            let dep = graph[edge.target()];
+        if edge.weight == DependencyEdge::Relation(Some(PP_RELATION)) {
+            let head = graph[edge.source()].token;
+            let dep = graph[edge.target()].token;
 
             let pn_rels: Vec<_> = graph.edges_directed(edge.target(), EdgeDirection::Outgoing)
-                .filter(|&(_, weight)| *weight == Weight::Relation(Some(PP_NOUN)))
+                .filter(|&(_, weight)| *weight == DependencyEdge::Relation(Some(PP_NOUN)))
                 .collect();
 
             if pn_rels.is_empty() {
                 continue;
             }
 
-            let dep_n = graph[pn_rels[0].0];
+            let dep_n = graph[pn_rels[0].0].token;
 
             let head_form = ok_or_continue!(extract_form(head, lemma));
             let dep_form = ok_or_continue!(extract_form(dep, lemma));
