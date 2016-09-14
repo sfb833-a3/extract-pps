@@ -7,7 +7,7 @@ use std::process;
 use std::env::args;
 
 use conllx::{Features, Token};
-use extract_pps::{DependencyGraph, DependencyEdge, or_exit, or_stdin, sentence_to_graph};
+use extract_pps::*;
 use getopts::Options;
 use petgraph::EdgeDirection;
 

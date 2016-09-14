@@ -1,6 +1,7 @@
 use conllx::{Sentence, Token};
 
-use petgraph::{Directed, Graph};
+use petgraph::{Directed, EdgeDirection, Graph};
+use petgraph::graph::NodeIndex;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum DependencyEdge<'a> {
@@ -53,4 +54,46 @@ pub fn sentence_to_graph(sentence: &Sentence, projective: bool) -> DependencyGra
     }
 
     g
+}
+
+pub fn first_matching_edge(graph: &DependencyGraph,
+                           index: NodeIndex,
+                           direction: EdgeDirection,
+                           weight: DependencyEdge)
+                           -> Option<NodeIndex> {
+    graph.edges_directed(index, direction)
+        .find(|&(_, e)| *e == weight)
+        .map(|(idx, _)| idx)
+}
+
+
+pub fn preceding_tokens<'a>(graph: &'a DependencyGraph<'a>,
+                            index: NodeIndex)
+                            -> PrecedingTokens<'a> {
+    PrecedingTokens {
+        graph: graph,
+        current: index,
+    }
+}
+
+pub struct PrecedingTokens<'a> {
+    graph: &'a DependencyGraph<'a>,
+    current: NodeIndex,
+}
+
+impl<'a> Iterator for PrecedingTokens<'a> {
+    type Item = NodeIndex;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match first_matching_edge(self.graph,
+                                  self.current,
+                                  EdgeDirection::Incoming,
+                                  DependencyEdge::Precedence) {
+            Some(idx) => {
+                self.current = idx;
+                Some(idx)
+            }
+            None => None,
+        }
+    }
 }

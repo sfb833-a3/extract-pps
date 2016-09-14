@@ -17,8 +17,7 @@ use std::process;
 use std::env::args;
 
 use conllx::{Features, Token};
-use extract_pps::{DependencyGraph, DependencyEdge, DependencyNode, or_exit, or_stdin,
-                  sentence_to_graph};
+use extract_pps::*;
 use getopts::Options;
 use petgraph::EdgeDirection;
 use petgraph::graph::NodeIndex;
@@ -176,28 +175,20 @@ fn find_competition<'a>(graph: &'a DependencyGraph<'a>,
                         head_idx: NodeIndex)
                         -> Option<Vec<&'a DependencyNode<'a>>> {
     let mut candidates = Vec::new();
-    let mut current = p_idx;
-    loop {
-        let preceding = match first_matching_edge(graph,
-                                                  current,
-                                                  EdgeDirection::Incoming,
-                                                  DependencyEdge::Precedence) {
-            Some(idx) => idx,
-            None => return None,
-        };
 
-        let node = &graph[preceding];
+    for idx in preceding_tokens(graph, p_idx) {
+        let node = &graph[idx];
         let pos = node.token.pos().unwrap();
 
         if FINITE_VERB_TAGS.contains(pos) {
-            let verb_idx = resolve_verb(graph, preceding);
+            let verb_idx = resolve_verb(graph, idx);
 
             if verb_idx != head_idx {
                 candidates.push(&graph[verb_idx]);
             }
 
-            // We should be in the left bracket now...
-            break;
+            return Some(candidates);
+
         } else {
             let token_tf = ok_or_continue!(feature_value(node.token, TOPO_FIELD_FEATURE));
 
@@ -206,15 +197,13 @@ fn find_competition<'a>(graph: &'a DependencyGraph<'a>,
                 return None;
             }
 
-            if preceding != head_idx && HEAD_TAGS.contains(pos) {
+            if idx != head_idx && HEAD_TAGS.contains(pos) {
                 candidates.push(node);
             }
         }
-
-        current = preceding;
     }
 
-    Some(candidates)
+    None
 }
 
 fn resolve_verb(graph: &DependencyGraph, verb: NodeIndex) -> NodeIndex {
@@ -226,16 +215,6 @@ fn resolve_verb(graph: &DependencyGraph, verb: NodeIndex) -> NodeIndex {
         Some(idx) => resolve_verb(graph, idx),
         None => verb,
     }
-}
-
-fn first_matching_edge(graph: &DependencyGraph,
-                       index: NodeIndex,
-                       direction: EdgeDirection,
-                       weight: DependencyEdge)
-                       -> Option<NodeIndex> {
-    graph.edges_directed(index, direction)
-        .find(|&(_, e)| *e == weight)
-        .map(|(idx, _)| idx)
 }
 
 fn feature_value(token: &Token, feature: &str) -> Option<String> {
