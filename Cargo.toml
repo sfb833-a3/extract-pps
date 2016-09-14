@@ -6,4 +6,5 @@ authors = ["Daniël de Kok <me@danieldk.eu>"]
 [dependencies]
 conllx = { path = "../conllx-rs" }
 getopts = "0.2"
+lazy_static = "0.2"
 petgraph = "0.2"

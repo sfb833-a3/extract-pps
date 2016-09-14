@@ -7,9 +7,9 @@ use std::process;
 use std::env::args;
 
 use conllx::{Features, Token};
-use extract_pps::{Weight, or_exit, or_stdin, sentence_to_graph};
+use extract_pps::{DependencyGraph, Weight, or_exit, or_stdin, sentence_to_graph};
 use getopts::Options;
-use petgraph::{EdgeDirection, Directed, Graph};
+use petgraph::EdgeDirection;
 
 static PP_NOUN: &'static str = "PN";
 
@@ -63,7 +63,7 @@ fn main() {
     }
 }
 
-fn print_pps(graph: &Graph<&Token, Weight, Directed>, lemma: bool) {
+fn print_pps(graph: &DependencyGraph, lemma: bool) {
     for edge in graph.raw_edges() {
         if edge.weight == Weight::Relation(Some(PP_RELATION)) {
             let head = graph[edge.source()];

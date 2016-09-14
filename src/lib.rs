@@ -5,4 +5,4 @@ mod cmd;
 pub use cmd::{or_exit, or_stdin};
 
 mod graph;
-pub use graph::{Weight, sentence_to_graph};
+pub use graph::{DependencyGraph, Weight, sentence_to_graph};
