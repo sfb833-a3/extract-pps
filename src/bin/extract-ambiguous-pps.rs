@@ -1,7 +1,14 @@
 extern crate conllx;
+
 extern crate extract_pps;
+
 extern crate getopts;
+
+#[macro_use]
+extern crate maplit;
+
 extern crate petgraph;
+
 #[macro_use]
 extern crate lazy_static;
 
@@ -10,12 +17,13 @@ use std::process;
 use std::env::args;
 
 use conllx::{Features, Token};
-use extract_pps::{DependencyGraph, DependencyEdge, DependencyNode, or_exit, or_stdin, sentence_to_graph};
+use extract_pps::{DependencyGraph, DependencyEdge, DependencyNode, or_exit, or_stdin,
+                  sentence_to_graph};
 use getopts::Options;
 use petgraph::EdgeDirection;
 use petgraph::graph::NodeIndex;
 
-static PP_NOUN: &'static str = "PN";
+static PREP_COMPL_RELATION: &'static str = "PN";
 
 static PP_RELATION: &'static str = "PP";
 
@@ -25,28 +33,28 @@ static TOPO_FIELD_FEATURE: &'static str = "tf";
 
 static TOPO_MIDDLE_FIELD: &'static str = "MF";
 
-static FINITE_VERB: &'static str = "VVFIN";
+static NAMED_ENTITY_TAG: &'static str = "NE";
 
-static FINITE_AUXILIARY: &'static str = "VAFIN";
+static NOUN_TAG: &'static str = "NN";
 
-static FINITE_MODAL: &'static str = "VMFIN";
+static FINITE_VERB_TAG: &'static str = "VVFIN";
+
+static FINITE_AUXILIARY_TAG: &'static str = "VAFIN";
+
+static FINITE_MODAL_TAG: &'static str = "VMFIN";
 
 lazy_static! {
-    static ref HEAD_TAGS: HashSet<&'static str> = {
-        let mut tags = HashSet::new();
-        tags.insert("NN");
-        tags.insert("NE");
-        tags.insert(FINITE_VERB);
-        tags.insert(FINITE_AUXILIARY);
-        tags
+    static ref HEAD_TAGS: HashSet<&'static str> = hashset!{
+        NOUN_TAG,
+        NAMED_ENTITY_TAG,
+        FINITE_VERB_TAG,
+        FINITE_AUXILIARY_TAG
     };
 
-    static ref FINITE_VERB_TAGS: HashSet<&'static str> = {
-        let mut tags = HashSet::new();
-        tags.insert(FINITE_VERB);
-        tags.insert(FINITE_AUXILIARY);
-        tags.insert(FINITE_MODAL);
-        tags
+    static ref FINITE_VERB_TAGS: HashSet<&'static str> = hashset!{
+        FINITE_VERB_TAG,
+        FINITE_AUXILIARY_TAG,
+        FINITE_MODAL_TAG
     };
 }
 
@@ -113,29 +121,24 @@ fn print_ambiguous_pps(graph: &DependencyGraph, lemma: bool) {
         let head_node = &graph[edge.source()];
         let head = graph[edge.source()].token;
         let head_pos = ok_or_continue!(head.pos());
-        
+
         // Skip PPs with heads that we are not interested in
         if !HEAD_TAGS.contains(head_pos) {
             continue;
         }
 
         let pp_node = &graph[edge.target()];
-
         let pp_field = ok_or_continue!(feature_value(pp_node.token, TOPO_FIELD_FEATURE));
 
+        // Skip PPs that are not in the middle field.
         if pp_field != TOPO_MIDDLE_FIELD {
             continue;
         }
 
-        let pn_rels = find_matching_edges(graph, edge.target(), EdgeDirection::Outgoing,
-            DependencyEdge::Relation(Some(PP_NOUN)));
+        let pn_rel = ok_or_continue!(first_matching_edge(graph, edge.target(),
+            EdgeDirection::Outgoing, DependencyEdge::Relation(Some(PREP_COMPL_RELATION))));
 
-        if pn_rels.is_empty() {
-            // sind davon überzeugt
-            continue;
-        }
-
-        let dep_n = graph[pn_rels[0]].token;
+        let dep_n = graph[pn_rel].token;
 
         let dep_form = ok_or_continue!(extract_form(pp_node.token, lemma));
         let dep_n_form = ok_or_continue!(extract_form(dep_n, lemma));
@@ -143,7 +146,8 @@ fn print_ambiguous_pps(graph: &DependencyGraph, lemma: bool) {
         let dep_pos = ok_or_continue!(pp_node.token.pos());
         let dep_n_pos = ok_or_continue!(dep_n.pos());
 
-        let mut competition = ok_or_continue!(find_competition(graph, edge.target(), edge.source()));
+        let mut competition =
+            ok_or_continue!(find_competition(graph, edge.target(), edge.source()));
 
         // Don't print when there is no ambiguity.
         if competition.is_empty() {
@@ -167,84 +171,71 @@ fn print_ambiguous_pps(graph: &DependencyGraph, lemma: bool) {
     }
 }
 
-fn find_competition<'a>(graph: &'a DependencyGraph<'a>, p_idx: NodeIndex, head_idx: NodeIndex) -> Option<Vec<&'a DependencyNode<'a>>> {
+fn find_competition<'a>(graph: &'a DependencyGraph<'a>,
+                        p_idx: NodeIndex,
+                        head_idx: NodeIndex)
+                        -> Option<Vec<&'a DependencyNode<'a>>> {
     let mut candidates = Vec::new();
     let mut current = p_idx;
-        loop {
+    loop {
+        let preceding = match first_matching_edge(graph,
+                                                  current,
+                                                  EdgeDirection::Incoming,
+                                                  DependencyEdge::Precedence) {
+            Some(idx) => idx,
+            None => return None,
+        };
 
-            let preceding = find_matching_edges(graph, current, EdgeDirection::Incoming, DependencyEdge::Precedence);
+        let node = &graph[preceding];
+        let pos = node.token.pos().unwrap();
 
-            if preceding.len() > 1 {
-                panic!("Multiple immediately preceding tokens, should not happen.")
+        if FINITE_VERB_TAGS.contains(pos) {
+            let verb_idx = resolve_verb(graph, preceding);
+
+            if verb_idx != head_idx {
+                candidates.push(&graph[verb_idx]);
             }
 
-            // When there is no left bracket, skip this PP.
-            // E.g.: Die gefahr für eine Trinkerin , vom partner Verlassen zu werden , [...]
-            if preceding.len() == 0 {
-                return None
+            // We should be in the left bracket now...
+            break;
+        } else {
+            let token_tf = ok_or_continue!(feature_value(node.token, TOPO_FIELD_FEATURE));
+
+            // Bail out if we have a C-feld.
+            if token_tf == "C" {
+                return None;
             }
 
-            let preceding = preceding[0];
-
-            let node = &graph[preceding];
-
-            let pos = node.token.pos().unwrap();
-            if FINITE_VERB_TAGS.contains(pos) {
-                let verb_idx = resolve_verb(graph, preceding);
-                
-                if verb_idx != head_idx {
-                    candidates.push(&graph[verb_idx]);
-                }
-
-                // We should be in the left bracket now...
-                break;
-            } else {
-                let token_tf = ok_or_continue!(feature_value(node.token, TOPO_FIELD_FEATURE));
-
-                // Bail out if we have a C-feld.
-                if token_tf == "C" {
-                    return None
-                }
-
-                if preceding != head_idx && HEAD_TAGS.contains(pos) {
-                    candidates.push(node);
-                }
-
-                // TODO: change to: if field is LK, break.
-                if pos == "VVFIN" {
-                    break;
-                }
+            if preceding != head_idx && HEAD_TAGS.contains(pos) {
+                candidates.push(node);
             }
-
-
-            current = preceding;
         }
 
-        Some(candidates)
+        current = preceding;
+    }
+
+    Some(candidates)
 }
 
 fn resolve_verb(graph: &DependencyGraph, verb: NodeIndex) -> NodeIndex {
     // Look for non-aux.
-    let non_finites = find_matching_edges(graph, verb, EdgeDirection::Outgoing,
-        DependencyEdge::Relation(Some(AUXILIARY_RELATION)));
-    
-    if non_finites.len() == 0 {
-        return verb
+    match first_matching_edge(graph,
+                              verb,
+                              EdgeDirection::Outgoing,
+                              DependencyEdge::Relation(Some(AUXILIARY_RELATION))) {
+        Some(idx) => resolve_verb(graph, idx),
+        None => verb,
     }
-
-    resolve_verb(graph, non_finites[0])
 }
 
-fn find_matching_edges(graph: &DependencyGraph,
+fn first_matching_edge(graph: &DependencyGraph,
                        index: NodeIndex,
                        direction: EdgeDirection,
                        weight: DependencyEdge)
-                       -> Vec<NodeIndex> {
+                       -> Option<NodeIndex> {
     graph.edges_directed(index, direction)
-        .filter(|&(_, e)| *e == weight)
+        .find(|&(_, e)| *e == weight)
         .map(|(idx, _)| idx)
-        .collect()
-
 }
 
 fn feature_value(token: &Token, feature: &str) -> Option<String> {

@@ -10,7 +10,7 @@ pub enum DependencyEdge<'a> {
 
 pub struct DependencyNode<'a> {
     pub token: &'a Token,
-    pub offset: usize
+    pub offset: usize,
 }
 
 pub type DependencyGraph<'a> = Graph<DependencyNode<'a>, DependencyEdge<'a>, Directed>;
@@ -20,7 +20,12 @@ pub fn sentence_to_graph(sentence: &Sentence, projective: bool) -> DependencyGra
 
     let nodes: Vec<_> = sentence.iter()
         .enumerate()
-        .map(|(offset, token)| g.add_node(DependencyNode{token: token, offset: offset}))
+        .map(|(offset, token)| {
+            g.add_node(DependencyNode {
+                token: token,
+                offset: offset,
+            })
+        })
         .collect();
 
     for (idx, token) in sentence.iter().enumerate() {
