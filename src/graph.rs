@@ -56,13 +56,14 @@ pub fn sentence_to_graph(sentence: &Sentence, projective: bool) -> DependencyGra
     g
 }
 
-pub fn first_matching_edge(graph: &DependencyGraph,
+pub fn first_matching_edge<F>(graph: &DependencyGraph,
                            index: NodeIndex,
                            direction: EdgeDirection,
-                           weight: DependencyEdge)
-                           -> Option<NodeIndex> {
+                           predicate: F)
+                           -> Option<NodeIndex>
+                           where F: Fn(&DependencyEdge) -> bool {
     graph.edges_directed(index, direction)
-        .find(|&(_, e)| *e == weight)
+        .find(|&(_, e)| predicate(e))
         .map(|(idx, _)| idx)
 }
 
@@ -88,7 +89,7 @@ impl<'a> Iterator for PrecedingTokens<'a> {
         match first_matching_edge(self.graph,
                                   self.current,
                                   EdgeDirection::Incoming,
-                                  DependencyEdge::Precedence) {
+                                  |e| *e == DependencyEdge::Precedence) {
             Some(idx) => {
                 self.current = idx;
                 Some(idx)

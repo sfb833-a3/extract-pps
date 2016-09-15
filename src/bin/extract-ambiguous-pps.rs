@@ -33,6 +33,8 @@ static TOPO_FIELD_FEATURE: &'static str = "tf";
 
 static TOPO_MIDDLE_FIELD: &'static str = "MF";
 
+static TOPO_C_FIELD: &'static str = "C";
+
 static NAMED_ENTITY_TAG: &'static str = "NE";
 
 static NOUN_TAG: &'static str = "NN";
@@ -139,7 +141,7 @@ fn print_ambiguous_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool)
         }
 
         let pn_rel = ok_or_continue!(first_matching_edge(graph, edge.target(),
-            EdgeDirection::Outgoing, DependencyEdge::Relation(Some(PREP_COMPL_RELATION))));
+            EdgeDirection::Outgoing, |e| *e == DependencyEdge::Relation(Some(PREP_COMPL_RELATION))));
 
         let dep_n = graph[pn_rel].token;
 
@@ -160,7 +162,6 @@ fn print_ambiguous_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool)
         // Add the gold annotation.
         competition.insert(0, head_node);
 
-        // TODO: pos noun
         or_exit(write!(writer, "{} {} {} {}", dep_form, dep_pos, dep_n_form, dep_n_pos));
         for candidate in competition {
             let token = candidate.token;
@@ -179,10 +180,12 @@ fn find_competition<'a>(graph: &'a DependencyGraph<'a>,
                         head_idx: NodeIndex)
                         -> Option<Vec<&'a DependencyNode<'a>>> {
     let mut candidates = Vec::new();
+    
 
     for idx in preceding_tokens(graph, p_idx) {
         let node = &graph[idx];
         let pos = node.token.pos().unwrap();
+        let tf = ok_or_continue!(feature_value(node.token, TOPO_FIELD_FEATURE));
 
         if FINITE_VERB_TAGS.contains(pos) {
             let verb_idx = resolve_verb(graph, idx);
@@ -193,14 +196,22 @@ fn find_competition<'a>(graph: &'a DependencyGraph<'a>,
 
             return Some(candidates);
 
-        } else {
-            let token_tf = ok_or_continue!(feature_value(node.token, TOPO_FIELD_FEATURE));
+        } else if tf == TOPO_C_FIELD {
+            // Find the finite verb of the clause
+            if let Some(finite_idx) = first_matching_edge(graph, idx, EdgeDirection::Incoming, is_relation) {
+                let verb_idx = resolve_verb(graph, finite_idx);
 
-            // Bail out if we have a C-feld.
-            if token_tf == "C" {
-                return None;
+                if verb_idx != head_idx{
+                    candidates.push(&graph[verb_idx]);
+                }
+
+                return Some(candidates)
+            } else {
+                // C-feld without a head.
+                return None
             }
 
+        } else {
             if idx != head_idx && HEAD_TAGS.contains(pos) {
                 candidates.push(node);
             }
@@ -210,12 +221,19 @@ fn find_competition<'a>(graph: &'a DependencyGraph<'a>,
     None
 }
 
+fn is_relation(e: &DependencyEdge) -> bool {
+    match *e {
+                    DependencyEdge::Relation(_) => true,
+                    DependencyEdge::Precedence => false
+                }
+}
+
 fn resolve_verb(graph: &DependencyGraph, verb: NodeIndex) -> NodeIndex {
     // Look for non-aux.
     match first_matching_edge(graph,
                               verb,
                               EdgeDirection::Outgoing,
-                              DependencyEdge::Relation(Some(AUXILIARY_RELATION))) {
+                              |e| *e == DependencyEdge::Relation(Some(AUXILIARY_RELATION))) {
         Some(idx) => resolve_verb(graph, idx),
         None => verb,
     }
