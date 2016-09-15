@@ -172,6 +172,8 @@ fn print_ambiguous_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool)
         // Add the gold annotation.
         competition.insert(0, head_node);
 
+        // Fixme: we don't want ok_or_contiues in here, or the output should be written
+        //        to a buffer first.
         or_exit(write!(writer, "{} {} {} {}", dep_form, dep_pos, dep_n_form, dep_n_pos));
         for candidate in competition {
             let token = candidate.token;
@@ -194,8 +196,8 @@ fn find_competition<'a>(graph: &'a DependencyGraph<'a>,
 
     for idx in preceding_tokens(graph, p_idx) {
         let node = &graph[idx];
-        let pos = node.token.pos().unwrap();
-        let tf = ok_or_continue!(feature_value(node.token, TOPO_FIELD_FEATURE));
+        let pos = ok_or_break!(node.token.pos());
+        let tf = ok_or_break!(feature_value(node.token, TOPO_FIELD_FEATURE));
 
         if FINITE_VERB_TAGS.contains(pos) {
             let verb_idx = resolve_verb(graph, idx);
