@@ -33,6 +33,8 @@ static TOPO_FIELD_FEATURE: &'static str = "tf";
 
 static TOPO_MIDDLE_FIELD: &'static str = "MF";
 
+static TOPO_RK_FIELD: &'static str = "VC";
+
 static TOPO_C_FIELD: &'static str = "C";
 
 static NAMED_ENTITY_TAG: &'static str = "NE";
@@ -66,6 +68,14 @@ macro_rules! ok_or_continue {
         None => continue,
     })
 }
+
+macro_rules! ok_or_break {
+    ($expr:expr) => (match $expr {
+        Some(val) => val,
+        None => break,
+    })
+}
+
 
 macro_rules! stderr(
     ($($arg:tt)*) => { {
@@ -198,7 +208,7 @@ fn find_competition<'a>(graph: &'a DependencyGraph<'a>,
 
         } else if tf == TOPO_C_FIELD {
             // Find the finite verb of the clause
-            if let Some(finite_idx) = first_matching_edge(graph, idx, EdgeDirection::Incoming, is_relation) {
+            if let Some(finite_idx) = traverse_c_to_vc(graph, idx) {
                 let verb_idx = resolve_verb(graph, finite_idx);
 
                 if verb_idx != head_idx{
@@ -210,7 +220,6 @@ fn find_competition<'a>(graph: &'a DependencyGraph<'a>,
                 // C-feld without a head.
                 return None
             }
-
         } else {
             if idx != head_idx && HEAD_TAGS.contains(pos) {
                 candidates.push(node);
@@ -221,11 +230,19 @@ fn find_competition<'a>(graph: &'a DependencyGraph<'a>,
     None
 }
 
-fn is_relation(e: &DependencyEdge) -> bool {
-    match *e {
-                    DependencyEdge::Relation(_) => true,
-                    DependencyEdge::Precedence => false
-                }
+fn traverse_c_to_vc(graph: &DependencyGraph, idx: NodeIndex) -> Option<NodeIndex> {
+    for idx in ancestor_tokens(graph, idx) {
+        let node = &graph[idx];
+        let field = ok_or_break!(feature_value(node.token, TOPO_FIELD_FEATURE));
+
+        if field == TOPO_RK_FIELD {
+            return Some(idx);
+        } else if field != TOPO_C_FIELD {
+            return None;
+        }
+    }
+
+    None
 }
 
 fn resolve_verb(graph: &DependencyGraph, verb: NodeIndex) -> NodeIndex {

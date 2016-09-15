@@ -98,3 +98,41 @@ impl<'a> Iterator for PrecedingTokens<'a> {
         }
     }
 }
+
+pub fn ancestor_tokens<'a>(graph: &'a DependencyGraph<'a>,
+                            index: NodeIndex)
+                            -> AncestorTokens<'a> {
+    AncestorTokens {
+        graph: graph,
+        current: index,
+    }
+}
+
+pub struct AncestorTokens<'a> {
+    graph: &'a DependencyGraph<'a>,
+    current: NodeIndex
+}
+
+impl<'a> Iterator for AncestorTokens<'a> {
+    type Item = NodeIndex;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match first_matching_edge(self.graph,
+                                  self.current,
+                                  EdgeDirection::Incoming,
+                                  is_relation) {
+            Some(idx) => {
+                self.current = idx;
+                Some(idx)
+            }
+            None => None,
+        }
+    }
+}
+
+fn is_relation(e: &DependencyEdge) -> bool {
+    match *e {
+                    DependencyEdge::Relation(_) => true,
+                    DependencyEdge::Precedence => false
+                }
+}
