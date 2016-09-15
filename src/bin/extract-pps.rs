@@ -3,6 +3,7 @@ extern crate extract_pps;
 extern crate getopts;
 extern crate petgraph;
 
+use std::io::Write;
 use std::process;
 use std::env::args;
 
@@ -56,14 +57,17 @@ fn main() {
     let input = or_stdin(matches.free.get(0));
     let reader = conllx::Reader::new(or_exit(input.buf_read()));
 
+    let output = or_stdout(matches.free.get(1));
+    let mut writer = or_exit(output.buf_write());
+
     for sentence in reader.sentences() {
         let sentence = or_exit(sentence);
         let graph = sentence_to_graph(&sentence, false);
-        print_pps(&graph, matches.opt_present("l"))
+        print_pps(&mut writer, &graph, matches.opt_present("l"))
     }
 }
 
-fn print_pps(graph: &DependencyGraph, lemma: bool) {
+fn print_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool) {
     for edge in graph.raw_edges() {
         if edge.weight == DependencyEdge::Relation(Some(PP_RELATION)) {
             let head = graph[edge.source()].token;
@@ -89,14 +93,15 @@ fn print_pps(graph: &DependencyGraph, lemma: bool) {
             let head_field = ok_or_continue!(feature_value(head, TOPO_FIELD_FEATURE));
             let pp_field = ok_or_continue!(feature_value(dep, TOPO_FIELD_FEATURE));
 
-            println!("{} {} {} {} {} {} {}",
-                     head_form,
-                     head_pos,
-                     head_field,
-                     dep_form,
-                     dep_pos,
-                     pp_field,
-                     dep_n_form);
+            or_exit(writeln!(writer,
+                             "{} {} {} {} {} {} {}",
+                             head_form,
+                             head_pos,
+                             head_field,
+                             dep_form,
+                             dep_pos,
+                             pp_field,
+                             dep_n_form));
         }
     }
 }

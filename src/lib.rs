@@ -2,7 +2,7 @@ extern crate conllx;
 extern crate petgraph;
 
 mod cmd;
-pub use cmd::{or_exit, or_stdin};
+pub use cmd::{or_exit, or_stdin, or_stdout};
 
 mod graph;
 pub use graph::{DependencyGraph, DependencyEdge, DependencyNode, PrecedingTokens,

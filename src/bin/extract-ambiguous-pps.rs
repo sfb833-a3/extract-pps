@@ -13,6 +13,7 @@ extern crate petgraph;
 extern crate lazy_static;
 
 use std::collections::HashSet;
+use std::io::Write;
 use std::process;
 use std::env::args;
 
@@ -103,14 +104,17 @@ fn main() {
     let input = or_stdin(matches.free.get(0));
     let reader = conllx::Reader::new(or_exit(input.buf_read()));
 
+    let output = or_stdout(matches.free.get(1));
+    let mut writer = or_exit(output.buf_write());
+
     for sentence in reader.sentences() {
         let sentence = or_exit(sentence);
         let graph = sentence_to_graph(&sentence, false);
-        print_ambiguous_pps(&graph, matches.opt_present("l"))
+        print_ambiguous_pps(&mut writer, &graph, matches.opt_present("l"))
     }
 }
 
-fn print_ambiguous_pps(graph: &DependencyGraph, lemma: bool) {
+fn print_ambiguous_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool) {
     'pp: for edge in graph.raw_edges() {
         // Find PPs in the graph
         if edge.weight != DependencyEdge::Relation(Some(PP_RELATION)) {
@@ -157,16 +161,16 @@ fn print_ambiguous_pps(graph: &DependencyGraph, lemma: bool) {
         competition.insert(0, head_node);
 
         // TODO: pos noun
-        print!("{} {} {} {}", dep_form, dep_pos, dep_n_form, dep_n_pos);
+        or_exit(write!(writer, "{} {} {} {}", dep_form, dep_pos, dep_n_form, dep_n_pos));
         for candidate in competition {
             let token = candidate.token;
-            print!(" {} {} {}",
+            or_exit(write!(writer, " {} {} {}",
                    ok_or_continue!(extract_form(&token, lemma)),
                    ok_or_continue!(token.pos()),
-                   candidate.offset as isize - pp_node.offset as isize);
+                   candidate.offset as isize - pp_node.offset as isize));
         }
 
-        println!("");
+        or_exit(writeln!(writer, ""));
     }
 }
 
