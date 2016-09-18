@@ -133,7 +133,6 @@ fn print_ambiguous_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool)
             continue;
         }
 
-        let head_node = &graph[edge.source()];
         let head = graph[edge.source()].token;
         let head_pos = ok_or_continue!(head.pos());
 
@@ -151,7 +150,8 @@ fn print_ambiguous_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool)
         }
 
         let pn_rel = ok_or_continue!(first_matching_edge(graph, edge.target(),
-            EdgeDirection::Outgoing, |e| *e == DependencyEdge::Relation(Some(PREP_COMPL_RELATION))));
+            EdgeDirection::Outgoing,
+            |e| *e == DependencyEdge::Relation(Some(PREP_COMPL_RELATION))));
 
         let dep_n = graph[pn_rel].token;
 
@@ -161,50 +161,57 @@ fn print_ambiguous_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool)
         let dep_pos = ok_or_continue!(pp_node.token.pos());
         let dep_n_pos = ok_or_continue!(dep_n.pos());
 
-        let mut competition =
-            ok_or_continue!(find_competition(graph, edge.target(), edge.source()));
+        let competition = ok_or_continue!(find_competition(graph, edge.target(), edge.source()));
 
         // Don't print when there is no ambiguity.
-        if competition.is_empty() {
+        if competition.len() == 1 {
             continue;
         }
-
-        // Add the gold annotation.
-        competition.insert(0, head_node);
 
         // Fixme: we don't want ok_or_contiues in here, or the output should be written
         //        to a buffer first.
         or_exit(write!(writer, "{} {} {} {}", dep_form, dep_pos, dep_n_form, dep_n_pos));
         for candidate in competition {
-            let token = candidate.token;
-            or_exit(write!(writer, " {} {} {}",
+            let token = candidate.node.token;
+            or_exit(write!(writer, " {} {} {} {} {}",
                    ok_or_continue!(extract_form(&token, lemma)),
                    ok_or_continue!(token.pos()),
-                   candidate.offset as isize - pp_node.offset as isize));
+                   candidate.node.offset as isize - pp_node.offset as isize,
+                   candidate.rank,
+                   if candidate.head {1} else {0}));
         }
 
         or_exit(writeln!(writer, ""));
     }
 }
 
+struct CompetingHead<'a> {
+    node: &'a DependencyNode<'a>,
+    rank: isize,
+    head: bool,
+}
+
 fn find_competition<'a>(graph: &'a DependencyGraph<'a>,
                         p_idx: NodeIndex,
                         head_idx: NodeIndex)
-                        -> Option<Vec<&'a DependencyNode<'a>>> {
+                        -> Option<Vec<CompetingHead>> {
     let mut candidates = Vec::new();
-    
 
     for idx in preceding_tokens(graph, p_idx) {
         let node = &graph[idx];
         let pos = ok_or_break!(node.token.pos());
         let tf = ok_or_break!(feature_value(node.token, TOPO_FIELD_FEATURE));
 
+        let head_rank = -(candidates.len() as isize + 1);
+
         if FINITE_VERB_TAGS.contains(pos) {
             let verb_idx = resolve_verb(graph, idx);
 
-            if verb_idx != head_idx {
-                candidates.push(&graph[verb_idx]);
-            }
+            candidates.push(CompetingHead {
+                node: &graph[verb_idx],
+                rank: if verb_idx == idx { head_rank } else { 1 },
+                head: verb_idx == head_idx,
+            });
 
             return Some(candidates);
 
@@ -213,18 +220,24 @@ fn find_competition<'a>(graph: &'a DependencyGraph<'a>,
             if let Some(finite_idx) = traverse_c_to_vc(graph, idx) {
                 let verb_idx = resolve_verb(graph, finite_idx);
 
-                if verb_idx != head_idx{
-                    candidates.push(&graph[verb_idx]);
-                }
+                candidates.push(CompetingHead {
+                    node: &graph[verb_idx],
+                    rank: 1,
+                    head: head_idx == verb_idx,
+                });
 
-                return Some(candidates)
+                return Some(candidates);
             } else {
                 // C-feld without a head.
-                return None
+                return None;
             }
         } else {
-            if idx != head_idx && HEAD_TAGS.contains(pos) {
-                candidates.push(node);
+            if HEAD_TAGS.contains(pos) {
+                candidates.push(CompetingHead {
+                    node: node,
+                    rank: head_rank,
+                    head: head_idx == idx,
+                });
             }
         }
     }

@@ -57,11 +57,12 @@ pub fn sentence_to_graph(sentence: &Sentence, projective: bool) -> DependencyGra
 }
 
 pub fn first_matching_edge<F>(graph: &DependencyGraph,
-                           index: NodeIndex,
-                           direction: EdgeDirection,
-                           predicate: F)
-                           -> Option<NodeIndex>
-                           where F: Fn(&DependencyEdge) -> bool {
+                              index: NodeIndex,
+                              direction: EdgeDirection,
+                              predicate: F)
+                              -> Option<NodeIndex>
+    where F: Fn(&DependencyEdge) -> bool
+{
     graph.edges_directed(index, direction)
         .find(|&(_, e)| predicate(e))
         .map(|(idx, _)| idx)
@@ -99,9 +100,7 @@ impl<'a> Iterator for PrecedingTokens<'a> {
     }
 }
 
-pub fn ancestor_tokens<'a>(graph: &'a DependencyGraph<'a>,
-                            index: NodeIndex)
-                            -> AncestorTokens<'a> {
+pub fn ancestor_tokens<'a>(graph: &'a DependencyGraph<'a>, index: NodeIndex) -> AncestorTokens<'a> {
     AncestorTokens {
         graph: graph,
         current: index,
@@ -110,7 +109,7 @@ pub fn ancestor_tokens<'a>(graph: &'a DependencyGraph<'a>,
 
 pub struct AncestorTokens<'a> {
     graph: &'a DependencyGraph<'a>,
-    current: NodeIndex
+    current: NodeIndex,
 }
 
 impl<'a> Iterator for AncestorTokens<'a> {
@@ -132,7 +131,7 @@ impl<'a> Iterator for AncestorTokens<'a> {
 
 fn is_relation(e: &DependencyEdge) -> bool {
     match *e {
-                    DependencyEdge::Relation(_) => true,
-                    DependencyEdge::Precedence => false
-                }
+        DependencyEdge::Relation(_) => true,
+        DependencyEdge::Precedence => false,
+    }
 }
