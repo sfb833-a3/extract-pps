@@ -70,9 +70,10 @@ fn print_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool) {
             let head = graph[edge.source()].token;
             let dep = graph[edge.target()].token;
 
-            let pn_rels: Vec<_> = graph.edges_directed(edge.target(), EdgeDirection::Outgoing)
-                .filter(|&(_, weight)| *weight == DependencyEdge::Relation(Some(PP_NOUN)))
-                .collect();
+            let preceding_tag = match preceding_tokens(graph, edge.target()).next() {
+                    Some(idx) => graph[idx].token.pos().unwrap_or("NONE"),
+                    None => "NONE"
+            };
 
             let pn_rel = ok_or_continue!(first_matching_edge(
                     graph, edge.target(), EdgeDirection::Outgoing,
@@ -91,14 +92,15 @@ fn print_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool) {
             let pp_field = ok_or_continue!(feature_value(dep, TOPO_FIELD_FEATURE));
 
             or_exit(writeln!(writer,
-                             "{} {} {} {} {} {} {}",
+                             "{} {} {} {} {} {} {} {}",
                              head_form,
                              head_pos,
                              head_field,
                              dep_form,
                              dep_pos,
                              pp_field,
-                             dep_n_form));
+                             dep_n_form,
+                             preceding_tag));
         }
     }
 }
