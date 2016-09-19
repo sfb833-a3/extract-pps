@@ -1,5 +1,6 @@
 extern crate conllx;
 
+#[macro_use]
 extern crate extract_pps;
 
 extern crate getopts;
@@ -61,28 +62,6 @@ lazy_static! {
         FINITE_MODAL_TAG
     };
 }
-
-macro_rules! ok_or_continue {
-    ($expr:expr) => (match $expr {
-        Some(val) => val,
-        None => continue,
-    })
-}
-
-macro_rules! ok_or_break {
-    ($expr:expr) => (match $expr {
-        Some(val) => val,
-        None => break,
-    })
-}
-
-
-macro_rules! stderr(
-    ($($arg:tt)*) => { {
-        let r = writeln!(&mut ::std::io::stderr(), $($arg)*);
-        r.expect("failed printing to stderr");
-    } }
-);
 
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} [options] [INPUT_FILE] [OUTPUT_FILE]", program);

@@ -1,6 +1,10 @@
 extern crate conllx;
+
+#[macro_use]
 extern crate extract_pps;
+
 extern crate getopts;
+
 extern crate petgraph;
 
 use std::io::Write;
@@ -17,13 +21,6 @@ static PP_NOUN: &'static str = "PN";
 static PP_RELATION: &'static str = "PP";
 
 static TOPO_FIELD_FEATURE: &'static str = "tf";
-
-macro_rules! ok_or_continue {
-    ($expr:expr) => (match $expr {
-        Some(val) => val,
-        None => continue,
-    })
-}
 
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} [options] [INPUT_FILE] [OUTPUT_FILE]", program);
@@ -77,11 +74,11 @@ fn print_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool) {
                 .filter(|&(_, weight)| *weight == DependencyEdge::Relation(Some(PP_NOUN)))
                 .collect();
 
-            if pn_rels.is_empty() {
-                continue;
-            }
+            let pn_rel = ok_or_continue!(first_matching_edge(
+                    graph, edge.target(), EdgeDirection::Outgoing,
+                    |e| *e == DependencyEdge::Relation(Some(PP_NOUN))));
 
-            let dep_n = graph[pn_rels[0].0].token;
+            let dep_n = graph[pn_rel].token;
 
             let head_form = ok_or_continue!(extract_form(head, lemma));
             let dep_form = ok_or_continue!(extract_form(dep, lemma));
