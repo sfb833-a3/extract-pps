@@ -121,9 +121,12 @@ fn print_ambiguous_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool)
             continue;
         }
 
-        let pn_rel = ok_or_continue!(first_matching_edge(graph, edge.target(),
-            EdgeDirection::Outgoing,
-            |e| *e == DependencyEdge::Relation(Some(PREP_COMPL_RELATION))));
+        let pn_rel = ok_or_continue!(first_matching_edge(graph,
+                                                         edge.target(),
+                                                         EdgeDirection::Outgoing,
+                                                         |e| {
+                                                             *e == DependencyEdge::Relation(Some(PREP_COMPL_RELATION))
+                                                         }));
 
         let dep_n = graph[pn_rel].token;
 
@@ -142,15 +145,21 @@ fn print_ambiguous_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool)
 
         // Fixme: we don't want ok_or_contiues in here, or the output should be written
         //        to a buffer first.
-        or_exit(write!(writer, "{} {} {} {}", dep_form, dep_pos, dep_n_form, dep_n_pos));
+        or_exit(write!(writer,
+                       "{} {} {} {}",
+                       dep_form,
+                       dep_pos,
+                       dep_n_form,
+                       dep_n_pos));
         for candidate in competition {
             let token = candidate.node.token;
-            or_exit(write!(writer, " {} {} {} {} {}",
-                   ok_or_continue!(extract_form(&token, lemma)),
-                   ok_or_continue!(token.pos()),
-                   candidate.node.offset as isize - pp_node.offset as isize,
-                   candidate.rank,
-                   if candidate.head {1} else {0}));
+            or_exit(write!(writer,
+                           " {} {} {} {} {}",
+                           ok_or_continue!(extract_form(&token, lemma)),
+                           ok_or_continue!(token.pos()),
+                           candidate.node.offset as isize - pp_node.offset as isize,
+                           candidate.rank,
+                           if candidate.head { 1 } else { 0 }));
         }
 
         or_exit(writeln!(writer, ""));
