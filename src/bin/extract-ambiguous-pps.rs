@@ -38,10 +38,6 @@ static TOPO_RK_FIELD: &'static str = "VC";
 
 static TOPO_C_FIELD: &'static str = "C";
 
-static NAMED_ENTITY_TAG: &'static str = "NE";
-
-static NOUN_TAG: &'static str = "NN";
-
 static FINITE_VERB_TAG: &'static str = "VVFIN";
 
 static FINITE_AUXILIARY_TAG: &'static str = "VAFIN";
@@ -49,18 +45,15 @@ static FINITE_AUXILIARY_TAG: &'static str = "VAFIN";
 static FINITE_MODAL_TAG: &'static str = "VMFIN";
 
 lazy_static! {
-    static ref HEAD_TAGS: HashSet<&'static str> = hashset!{
-        NOUN_TAG,
-        NAMED_ENTITY_TAG,
-        FINITE_VERB_TAG,
-        FINITE_AUXILIARY_TAG
-    };
-
     static ref FINITE_VERB_TAGS: HashSet<&'static str> = hashset!{
         FINITE_VERB_TAG,
         FINITE_AUXILIARY_TAG,
         FINITE_MODAL_TAG
     };
+}
+
+fn relevant_head_tag(tag: &str) -> bool {
+    tag.starts_with("N") || tag.starts_with("V")
 }
 
 fn print_usage(program: &str, opts: Options) {
@@ -116,7 +109,7 @@ fn print_ambiguous_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool)
         let head_pos = ok_or_continue!(head.pos());
 
         // Skip PPs with heads that we are not interested in
-        if !HEAD_TAGS.contains(head_pos) {
+        if !relevant_head_tag(head_pos) {
             continue;
         }
 
@@ -211,7 +204,7 @@ fn find_competition<'a>(graph: &'a DependencyGraph<'a>,
                 return None;
             }
         } else {
-            if HEAD_TAGS.contains(pos) {
+            if relevant_head_tag(pos) {
                 candidates.push(CompetingHead {
                     node: node,
                     rank: head_rank,

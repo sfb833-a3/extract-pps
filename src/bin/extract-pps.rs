@@ -71,13 +71,16 @@ fn print_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool) {
             let dep = graph[edge.target()].token;
 
             let preceding_tag = match preceding_tokens(graph, edge.target()).next() {
-                    Some(idx) => graph[idx].token.pos().unwrap_or("NONE"),
-                    None => "NONE"
+                Some(idx) => graph[idx].token.pos().unwrap_or("NONE"),
+                None => "NONE",
             };
 
-            let pn_rel = ok_or_continue!(first_matching_edge(
-                    graph, edge.target(), EdgeDirection::Outgoing,
-                    |e| *e == DependencyEdge::Relation(Some(PP_NOUN))));
+            let pn_rel = ok_or_continue!(first_matching_edge(graph,
+                                                             edge.target(),
+                                                             EdgeDirection::Outgoing,
+                                                             |e| {
+                                                                 *e == DependencyEdge::Relation(Some(PP_NOUN))
+                                                             }));
 
             let dep_n = graph[pn_rel].token;
 
