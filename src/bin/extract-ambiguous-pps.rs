@@ -70,6 +70,7 @@ fn main() {
     let program = args[0].clone();
 
     let mut opts = Options::new();
+    opts.optflag("a", "all", "extract all PPs, including PPs with no head competition");
     opts.optflag("h", "help", "print this help menu");
     opts.optflag("l", "lemma", "use lemmas instead of forms");
     let matches = or_exit(opts.parse(&args[1..]));
@@ -94,11 +95,11 @@ fn main() {
     for sentence in reader.sentences() {
         let sentence = or_exit(sentence);
         let graph = sentence_to_graph(&sentence, false);
-        print_ambiguous_pps(&mut writer, &graph, matches.opt_present("l"))
+        print_ambiguous_pps(&mut writer, &graph, matches.opt_present("l"), matches.opt_present("a"))
     }
 }
 
-fn print_ambiguous_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool) {
+fn print_ambiguous_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool, all: bool) {
     'pp: for edge in graph.raw_edges() {
         // Find PPs in the graph
         if edge.weight != DependencyEdge::Relation(Some(PP_RELATION)) {
@@ -139,7 +140,7 @@ fn print_ambiguous_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool)
         let competition = ok_or_continue!(find_competition(graph, edge.target(), edge.source()));
 
         // Don't print when there is no ambiguity.
-        if competition.len() == 1 {
+        if !all && competition.len() == 1 {
             continue;
         }
 
