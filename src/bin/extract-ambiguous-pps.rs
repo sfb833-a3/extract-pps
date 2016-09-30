@@ -144,7 +144,7 @@ fn print_ambiguous_pps(writer: &mut Write,
                        lemma: bool,
                        all: bool,
                        field: Field) {
-    'pp: for edge in graph.raw_edges() {
+    for edge in graph.raw_edges() {
         // Find PPs in the graph
         if edge.weight != DependencyEdge::Relation(Some(PP_RELATION)) {
             continue;
