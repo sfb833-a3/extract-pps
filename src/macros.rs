@@ -15,6 +15,14 @@ macro_rules! ok_or_break {
 }
 
 #[macro_export]
+macro_rules! try_ok {
+    ($expr:expr) => (match $expr {
+        Some(val) => val,
+        None => return None,
+    })
+}
+
+#[macro_export]
 macro_rules! stderr(
     ($($arg:tt)*) => { {
         let r = writeln!(&mut ::std::io::stderr(), $($arg)*);

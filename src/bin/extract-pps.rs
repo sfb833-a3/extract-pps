@@ -70,10 +70,11 @@ fn print_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool) {
             let head = graph[edge.source()].token;
             let dep = graph[edge.target()].token;
 
-            let preceding_tag = match preceding_tokens(graph, edge.target()).next() {
-                Some(idx) => graph[idx].token.pos().unwrap_or("NONE"),
-                None => "NONE",
-            };
+            let preceding_tag =
+                match adjacent_tokens(graph, edge.target(), Direction::Preceeding).next() {
+                    Some(idx) => graph[idx].token.pos().unwrap_or("NONE"),
+                    None => "NONE",
+                };
 
             let pn_rel = ok_or_continue!(first_matching_edge(graph,
                                                              edge.target(),

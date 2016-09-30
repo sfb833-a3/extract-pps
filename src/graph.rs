@@ -68,28 +68,40 @@ pub fn first_matching_edge<F>(graph: &DependencyGraph,
         .map(|(idx, _)| idx)
 }
 
+pub enum Direction {
+    Preceeding,
+    Succeeding,
+}
 
-pub fn preceding_tokens<'a>(graph: &'a DependencyGraph<'a>,
-                            index: NodeIndex)
-                            -> PrecedingTokens<'a> {
-    PrecedingTokens {
+pub fn adjacent_tokens<'a>(graph: &'a DependencyGraph<'a>,
+                           index: NodeIndex,
+                           direction: Direction)
+                           -> AdjacentTokens<'a> {
+    AdjacentTokens {
         graph: graph,
         current: index,
+        direction: direction,
     }
 }
 
-pub struct PrecedingTokens<'a> {
+pub struct AdjacentTokens<'a> {
     graph: &'a DependencyGraph<'a>,
     current: NodeIndex,
+    direction: Direction,
 }
 
-impl<'a> Iterator for PrecedingTokens<'a> {
+impl<'a> Iterator for AdjacentTokens<'a> {
     type Item = NodeIndex;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let direction = match self.direction {
+            Direction::Preceeding => EdgeDirection::Incoming,
+            Direction::Succeeding => EdgeDirection::Outgoing,
+        };
+
         match first_matching_edge(self.graph,
                                   self.current,
-                                  EdgeDirection::Incoming,
+                                  direction,
                                   |e| *e == DependencyEdge::Precedence) {
             Some(idx) => {
                 self.current = idx;

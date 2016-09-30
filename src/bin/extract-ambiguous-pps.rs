@@ -14,6 +14,7 @@ extern crate petgraph;
 extern crate lazy_static;
 
 use std::collections::HashSet;
+use std::collections::HashMap;
 use std::io::Write;
 use std::process;
 use std::env::args;
@@ -24,6 +25,23 @@ use getopts::Options;
 use petgraph::EdgeDirection;
 use petgraph::graph::NodeIndex;
 
+#[derive(Clone,Copy)]
+enum Field {
+    VF,
+    MF,
+    NF,
+}
+
+impl Field {
+    fn string_value(&self) -> &'static str {
+        match *self {
+            Field::VF => "VF",
+            Field::MF => "MF",
+            Field::NF => panic!("No NF treatment yet"),
+        }
+    }
+}
+
 static PREP_COMPL_RELATION: &'static str = "PN";
 
 static PP_RELATION: &'static str = "PP";
@@ -31,8 +49,6 @@ static PP_RELATION: &'static str = "PP";
 static AUXILIARY_RELATION: &'static str = "AUX";
 
 static TOPO_FIELD_FEATURE: &'static str = "tf";
-
-static TOPO_MIDDLE_FIELD: &'static str = "MF";
 
 static TOPO_RK_FIELD: &'static str = "VC";
 
@@ -50,6 +66,12 @@ lazy_static! {
         FINITE_AUXILIARY_TAG,
         FINITE_MODAL_TAG
     };
+
+    static ref STRING_FIELD: HashMap<&'static str, Field> = hashmap!{
+        "VF" => Field::VF,
+        "MF" => Field::MF,
+        "NF" => Field::NF
+    } ;
 }
 
 fn relevant_head_tag(tag: &str) -> bool {
@@ -70,7 +92,10 @@ fn main() {
     let program = args[0].clone();
 
     let mut opts = Options::new();
-    opts.optflag("a", "all", "extract all PPs, including PPs with no head competition");
+    opts.optflag("a",
+                 "all",
+                 "extract all PPs, including PPs with no head competition");
+    opts.optopt("f", "field", "field to extract from", "FIELD");
     opts.optflag("h", "help", "print this help menu");
     opts.optflag("l", "lemma", "use lemmas instead of forms");
     let matches = or_exit(opts.parse(&args[1..]));
@@ -85,6 +110,17 @@ fn main() {
         process::exit(1);
     }
 
+
+    let field_opt = matches.opt_str("f").unwrap_or("MF".to_owned());
+
+    let field = match STRING_FIELD.get(field_opt.as_str()) {
+        Some(field) => *field,
+        None => {
+            stderr!("Unknown field");
+            process::exit(1);
+        }
+    };
+
     // Read CoNNL-X from stdin or file.
     let input = or_stdin(matches.free.get(0));
     let reader = conllx::Reader::new(or_exit(input.buf_read()));
@@ -95,11 +131,19 @@ fn main() {
     for sentence in reader.sentences() {
         let sentence = or_exit(sentence);
         let graph = sentence_to_graph(&sentence, false);
-        print_ambiguous_pps(&mut writer, &graph, matches.opt_present("l"), matches.opt_present("a"))
+        print_ambiguous_pps(&mut writer,
+                            &graph,
+                            matches.opt_present("l"),
+                            matches.opt_present("a"),
+                            field)
     }
 }
 
-fn print_ambiguous_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool, all: bool) {
+fn print_ambiguous_pps(writer: &mut Write,
+                       graph: &DependencyGraph,
+                       lemma: bool,
+                       all: bool,
+                       field: Field) {
     'pp: for edge in graph.raw_edges() {
         // Find PPs in the graph
         if edge.weight != DependencyEdge::Relation(Some(PP_RELATION)) {
@@ -117,8 +161,8 @@ fn print_ambiguous_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool,
         let pp_node = &graph[edge.target()];
         let pp_field = ok_or_continue!(feature_value(pp_node.token, TOPO_FIELD_FEATURE));
 
-        // Skip PPs that are not in the middle field.
-        if pp_field != TOPO_MIDDLE_FIELD {
+        if pp_field != field.string_value() {
+            // Skip PPs that are not in the field that we are interested in.
             continue;
         }
 
@@ -137,7 +181,11 @@ fn print_ambiguous_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool,
         let dep_pos = ok_or_continue!(pp_node.token.pos());
         let dep_n_pos = ok_or_continue!(dep_n.pos());
 
-        let competition = ok_or_continue!(find_competition(graph, edge.target(), edge.source()));
+        let competition = match field {
+            Field::VF => ok_or_continue!(find_competition_vf(graph, edge.target(), edge.source())),                
+            Field::MF => ok_or_continue!(find_competition_mf(graph, edge.target(), edge.source())),
+            Field::NF => panic!("NF handling missing"),
+        };
 
         // Don't print when there is no ambiguity.
         if !all && competition.len() == 1 {
@@ -173,13 +221,71 @@ struct CompetingHead<'a> {
     head: bool,
 }
 
-fn find_competition<'a>(graph: &'a DependencyGraph<'a>,
-                        p_idx: NodeIndex,
-                        head_idx: NodeIndex)
-                        -> Option<Vec<CompetingHead>> {
+fn find_competition_vf<'a>(graph: &'a DependencyGraph<'a>,
+                           p_idx: NodeIndex,
+                           head_idx: NodeIndex)
+                           -> Option<Vec<CompetingHead>> {
     let mut candidates = Vec::new();
 
-    for idx in preceding_tokens(graph, p_idx) {
+    // Exclude cases where the head is left of the PP.
+    if graph[head_idx].offset < graph[p_idx].offset {
+        return None;
+    }
+
+    // Find left bracket
+    let lk_idx = try_ok!(adjacent_tokens(graph, p_idx, Direction::Succeeding).find(|idx| {
+        let node = &graph[*idx];
+
+        match feature_value(node.token, "tf") {
+            Some(field) => field == "LK",
+            None => false,
+        }
+    }));
+
+    let verb_idx = resolve_verb(graph, lk_idx);
+
+
+
+    candidates.push(CompetingHead {
+        node: &graph[verb_idx],
+        rank: 1, // XXX
+        head: verb_idx == head_idx ||
+              ancestor_tokens(graph, verb_idx).find(|idx| *idx == head_idx).is_some(),
+    });
+
+    // Left bracket should not contain any other material...
+    let mf_tokens = adjacent_tokens(graph, lk_idx, Direction::Succeeding).take_while(|idx| {
+        match feature_value(&graph[*idx].token, "tf") {
+            Some(field) => field == "MF" || field == "UK",
+            None => false,
+        }
+    });
+
+    for idx in mf_tokens {
+        let node = &graph[idx];
+        let pos = ok_or_break!(node.token.pos());
+
+        let head_rank = -(candidates.len() as isize + 1);
+
+        if relevant_head_tag(pos) {
+            candidates.push(CompetingHead {
+                node: node,
+                rank: head_rank,
+                head: head_idx == idx,
+            });
+        }
+    }
+
+    Some(candidates)
+}
+
+fn find_competition_mf<'a>(graph: &'a DependencyGraph<'a>,
+                           p_idx: NodeIndex,
+                           head_idx: NodeIndex)
+                           -> Option<Vec<CompetingHead>> {
+    let mut candidates = Vec::new();
+
+    for idx in adjacent_tokens(graph, p_idx, Direction::Preceeding) {
         let node = &graph[idx];
         let pos = ok_or_break!(node.token.pos());
         let tf = ok_or_break!(feature_value(node.token, TOPO_FIELD_FEATURE));
