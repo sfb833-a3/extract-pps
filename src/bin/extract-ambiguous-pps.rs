@@ -228,9 +228,9 @@ fn find_competition_vf<'a>(graph: &'a DependencyGraph<'a>,
     let mut candidates = Vec::new();
 
     // Exclude cases where the head is left of the PP.
-    if graph[head_idx].offset < graph[p_idx].offset {
-        return None;
-    }
+    // if graph[head_idx].offset < graph[p_idx].offset {
+    //     return None;
+    // }
 
     // Find left bracket
     let lk_idx = try_ok!(adjacent_tokens(graph, p_idx, Direction::Succeeding).find(|idx| {
@@ -244,8 +244,6 @@ fn find_competition_vf<'a>(graph: &'a DependencyGraph<'a>,
 
     let verb_idx = resolve_verb(graph, lk_idx);
 
-
-
     candidates.push(CompetingHead {
         node: &graph[verb_idx],
         rank: 1, // XXX
@@ -253,15 +251,45 @@ fn find_competition_vf<'a>(graph: &'a DependencyGraph<'a>,
               ancestor_tokens(graph, verb_idx).find(|idx| *idx == head_idx).is_some(),
     });
 
-    // Left bracket should not contain any other material...
-    let mf_tokens = adjacent_tokens(graph, lk_idx, Direction::Succeeding).take_while(|idx| {
+    let preceding_is_noun = match adjacent_tokens(graph, p_idx, Direction::Preceeding).next() {
+        Some(prec_idx) => graph[prec_idx].token.pos().unwrap().starts_with("N"),
+        None => false,
+    };
+
+    let vf_tokens = adjacent_tokens(graph, p_idx, Direction::Preceeding).take_while(|idx| {
         match feature_value(&graph[*idx].token, "tf") {
-            Some(field) => field == "MF" || field == "UK",
+            Some(field) => field == "VF" || field == "UK",
             None => false,
         }
     });
 
-    for idx in mf_tokens {
+    add_tokens(graph, head_idx, vf_tokens, &mut candidates);
+
+
+    // Only add MF tokens when the preceding token is not a noun...
+    if !preceding_is_noun {
+        // Left bracket should not contain any other material...
+        let mf_tokens = adjacent_tokens(graph, lk_idx, Direction::Succeeding)
+            .take_while(|idx| {
+                match feature_value(&graph[*idx].token, "tf") {
+                    Some(field) => field == "MF" || field == "UK",
+                    None => false,
+                }
+            });
+
+        add_tokens(graph, head_idx, mf_tokens, &mut candidates);
+    }
+
+    Some(candidates)
+}
+
+fn add_tokens<'a, I>(graph: &'a DependencyGraph<'a>,
+                     head_idx: NodeIndex,
+                     tokens: I,
+                     candidates: &mut Vec<CompetingHead<'a>>)
+    where I: Iterator<Item = NodeIndex>
+{
+    for idx in tokens {
         let node = &graph[idx];
         let pos = ok_or_break!(node.token.pos());
 
@@ -275,8 +303,6 @@ fn find_competition_vf<'a>(graph: &'a DependencyGraph<'a>,
             });
         }
     }
-
-    Some(candidates)
 }
 
 fn find_competition_mf<'a>(graph: &'a DependencyGraph<'a>,
@@ -319,7 +345,7 @@ fn find_competition_mf<'a>(graph: &'a DependencyGraph<'a>,
                 // C-feld without a head.
                 return None;
             }
-        } else {
+        } else if tf == "MF" || tf == "UK" {
             if relevant_head_tag(pos) {
                 candidates.push(CompetingHead {
                     node: node,
@@ -327,6 +353,8 @@ fn find_competition_mf<'a>(graph: &'a DependencyGraph<'a>,
                     head: head_idx == idx,
                 });
             }
+        } else {
+            return None;
         }
     }
 
