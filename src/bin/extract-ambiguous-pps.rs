@@ -188,7 +188,7 @@ fn print_ambiguous_pps(writer: &mut Write,
         };
 
         // Don't print when there is no ambiguity.
-        if !all && competition.len() == 1 {
+        if !competition.iter().any(|x| x.head) || (!all && competition.len() == 1) {
             continue;
         }
 
