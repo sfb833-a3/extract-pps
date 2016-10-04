@@ -37,7 +37,7 @@ impl Field {
         match *self {
             Field::VF => "VF",
             Field::MF => "MF",
-            Field::NF => panic!("No NF treatment yet"),
+            Field::NF => "NF",
         }
     }
 }
@@ -184,7 +184,7 @@ fn print_ambiguous_pps(writer: &mut Write,
         let competition = match field {
             Field::VF => ok_or_continue!(find_competition_vf(graph, edge.target(), edge.source())),                
             Field::MF => ok_or_continue!(find_competition_mf(graph, edge.target(), edge.source())),
-            Field::NF => panic!("NF handling missing"),
+            Field::NF => ok_or_continue!(find_competition_nf(graph, edge.target(), edge.source())),
         };
 
         // Don't print when there is no ambiguity.
@@ -264,6 +264,68 @@ fn find_competition_vf<'a>(graph: &'a DependencyGraph<'a>,
     });
 
     add_tokens(graph, head_idx, vf_tokens, &mut candidates);
+
+
+    // Only add MF tokens when the preceding token is not a noun...
+    if !preceding_is_noun {
+        // Left bracket should not contain any other material...
+        let mf_tokens = adjacent_tokens(graph, lk_idx, Direction::Succeeding)
+            .take_while(|idx| {
+                match feature_value(&graph[*idx].token, "tf") {
+                    Some(field) => field == "MF" || field == "UK",
+                    None => false,
+                }
+            });
+
+        add_tokens(graph, head_idx, mf_tokens, &mut candidates);
+    }
+
+    Some(candidates)
+}
+
+fn find_competition_nf<'a>(graph: &'a DependencyGraph<'a>,
+                           p_idx: NodeIndex,
+                           head_idx: NodeIndex)
+                           -> Option<Vec<CompetingHead>> {
+    let mut candidates = Vec::new();
+
+    // Exclude cases where the head is left of the PP.
+    // if graph[head_idx].offset < graph[p_idx].offset {
+    //     return None;
+    // }
+
+    // Find right bracket
+    let lk_idx = try_ok!(adjacent_tokens(graph, p_idx, Direction::Preceeding).find(|idx| {
+        let node = &graph[*idx];
+
+        match feature_value(node.token, "tf") {
+            Some(field) => field == "LK" || field == "C",
+            None => false,
+        }
+    }));
+
+    let verb_idx = resolve_verb(graph, lk_idx);
+
+    candidates.push(CompetingHead {
+        node: &graph[verb_idx],
+        rank: 1, // XXX
+        head: verb_idx == head_idx ||
+              ancestor_tokens(graph, verb_idx).find(|idx| *idx == head_idx).is_some(),
+    });
+
+    let preceding_is_noun = match adjacent_tokens(graph, p_idx, Direction::Preceeding).next() {
+        Some(prec_idx) => graph[prec_idx].token.pos().unwrap().starts_with("N"),
+        None => false,
+    };
+
+    let nf_tokens = adjacent_tokens(graph, p_idx, Direction::Preceeding).take_while(|idx| {
+        match feature_value(&graph[*idx].token, "tf") {
+            Some(field) => field == "NF" || field == "UK",
+            None => false,
+        }
+    });
+
+    add_tokens(graph, head_idx, nf_tokens, &mut candidates);
 
 
     // Only add MF tokens when the preceding token is not a noun...
