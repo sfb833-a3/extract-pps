@@ -320,17 +320,19 @@ fn find_competition_nf<'a>(graph: &'a DependencyGraph<'a>,
     //     return None;
     // }
 
-    // Find right bracket
-    let lk_idx = try_ok!(adjacent_tokens(graph, p_idx, Direction::Preceeding).find(|idx| {
+    // Find a bracket
+    let bracket_idx = try_ok!(adjacent_tokens(graph, p_idx, Direction::Preceeding).find(|idx| {
         let node = &graph[*idx];
 
+        let pos = node.token.pos().unwrap();
+
         match feature_value(node.token, "tf") {
-            Some(field) => field == "LK" || field == "C",
+            Some(field) => (field == TOPO_RK_FIELD || field == "LK") && pos.starts_with("V"),
             None => false,
         }
     }));
 
-    let verb_idx = resolve_verb(graph, lk_idx);
+    let verb_idx = resolve_verb(graph, bracket_idx);
 
     candidates.push(CompetingHead {
         node: &graph[verb_idx],
@@ -355,6 +357,15 @@ fn find_competition_nf<'a>(graph: &'a DependencyGraph<'a>,
 
     // Only add MF tokens when the preceding token is not a noun...
     if !preceding_is_noun {
+        let lk_idx = try_ok!(adjacent_tokens(graph, p_idx, Direction::Preceeding).find(|idx| {
+            let node = &graph[*idx];
+
+            match feature_value(node.token, "tf") {
+                Some(field) => field == TOPO_C_FIELD || field == "LK",
+                None => false,
+            }
+        }));
+
         // Left bracket should not contain any other material...
         let mf_tokens = adjacent_tokens(graph, lk_idx, Direction::Succeeding)
             .take_while(|idx| {
