@@ -9,6 +9,7 @@ pub enum DependencyEdge<'a> {
     Precedence,
 }
 
+#[derive(Debug)]
 pub struct DependencyNode<'a> {
     pub token: &'a Token,
     pub offset: usize,
