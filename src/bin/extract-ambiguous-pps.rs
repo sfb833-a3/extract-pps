@@ -200,14 +200,17 @@ fn print_ambiguous_pps(writer: &mut Write,
                        dep_pos,
                        dep_n_form,
                        dep_n_pos));
-        for candidate in competition {
+
+        let ranks = compute_ranks(pp_node.offset, &competition);
+
+        for (rank, candidate) in ranks.iter().zip(competition) {
             let token = candidate.node.token;
             or_exit(write!(writer,
                            " {} {} {} {} {}",
                            ok_or_continue!(extract_form(&token, lemma)),
                            ok_or_continue!(token.pos()),
                            candidate.node.offset as isize - pp_node.offset as isize,
-                           candidate.rank,
+                           rank,
                            if candidate.head { 1 } else { 0 }));
         }
 
@@ -215,9 +218,33 @@ fn print_ambiguous_pps(writer: &mut Write,
     }
 }
 
+fn compute_ranks(p_offset: usize, competition: &Vec<CompetingHead>) -> Vec<isize> {
+    let indices: Vec<_> = (0..competition.len()).collect();
+
+    let mut before: Vec<_> =
+        indices.iter().filter(|&idx| competition[*idx].node.offset < p_offset).collect();
+    before.sort_by(|&a, &b| Ord::cmp(&competition[*b].node.offset, &competition[*a].node.offset));
+
+    let mut after: Vec<_> =
+        indices.iter().filter(|&idx| competition[*idx].node.offset > p_offset).collect();
+    after.sort_by(|&a, &b| Ord::cmp(&competition[*a].node.offset, &competition[*b].node.offset));
+
+    let mut ranks = vec![0; competition.len()];
+
+    for (rank, &idx) in before.iter().enumerate() {
+        ranks[*idx] = -(rank as isize + 1);
+    }
+
+    for (rank, &idx) in after.iter().enumerate() {
+        ranks[*idx] = rank as isize + 1;
+    }
+
+    ranks
+}
+
+#[derive(Clone, Debug)]
 struct CompetingHead<'a> {
     node: &'a DependencyNode<'a>,
-    rank: isize,
     head: bool,
 }
 
@@ -246,7 +273,6 @@ fn find_competition_vf<'a>(graph: &'a DependencyGraph<'a>,
 
     candidates.push(CompetingHead {
         node: &graph[verb_idx],
-        rank: 1, // XXX
         head: verb_idx == head_idx ||
               ancestor_tokens(graph, verb_idx).find(|idx| *idx == head_idx).is_some(),
     });
@@ -308,7 +334,6 @@ fn find_competition_nf<'a>(graph: &'a DependencyGraph<'a>,
 
     candidates.push(CompetingHead {
         node: &graph[verb_idx],
-        rank: 1, // XXX
         head: verb_idx == head_idx ||
               ancestor_tokens(graph, verb_idx).find(|idx| *idx == head_idx).is_some(),
     });
@@ -355,12 +380,9 @@ fn add_tokens<'a, I>(graph: &'a DependencyGraph<'a>,
         let node = &graph[idx];
         let pos = ok_or_break!(node.token.pos());
 
-        let head_rank = -(candidates.len() as isize + 1);
-
         if relevant_head_tag(pos) {
             candidates.push(CompetingHead {
                 node: node,
-                rank: head_rank,
                 head: head_idx == idx,
             });
         }
@@ -378,14 +400,11 @@ fn find_competition_mf<'a>(graph: &'a DependencyGraph<'a>,
         let pos = ok_or_break!(node.token.pos());
         let tf = ok_or_break!(feature_value(node.token, TOPO_FIELD_FEATURE));
 
-        let head_rank = -(candidates.len() as isize + 1);
-
         if FINITE_VERB_TAGS.contains(pos) {
             let verb_idx = resolve_verb(graph, idx);
 
             candidates.push(CompetingHead {
                 node: &graph[verb_idx],
-                rank: if verb_idx == idx { head_rank } else { 1 },
                 head: verb_idx == head_idx,
             });
 
@@ -398,7 +417,6 @@ fn find_competition_mf<'a>(graph: &'a DependencyGraph<'a>,
 
                 candidates.push(CompetingHead {
                     node: &graph[verb_idx],
-                    rank: 1,
                     head: head_idx == verb_idx,
                 });
 
@@ -411,7 +429,6 @@ fn find_competition_mf<'a>(graph: &'a DependencyGraph<'a>,
             if relevant_head_tag(pos) {
                 candidates.push(CompetingHead {
                     node: node,
-                    rank: head_rank,
                     head: head_idx == idx,
                 });
             }
