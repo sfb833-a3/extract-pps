@@ -50,9 +50,13 @@ static AUXILIARY_RELATION: &'static str = "AUX";
 
 static TOPO_FIELD_FEATURE: &'static str = "tf";
 
+static TOPO_LK_BRACKET: &'static str = "LK";
+
 static TOPO_RK_FIELD: &'static str = "VC";
 
 static TOPO_C_FIELD: &'static str = "C";
+
+static TOPO_UNKNOWN_FIELD: &'static str = "UK";
 
 static FINITE_VERB_TAG: &'static str = "VVFIN";
 
@@ -71,7 +75,7 @@ lazy_static! {
         "VF" => Field::VF,
         "MF" => Field::MF,
         "NF" => Field::NF
-    } ;
+    };
 }
 
 fn relevant_head_tag(tag: &str) -> bool {
@@ -110,8 +114,7 @@ fn main() {
         process::exit(1);
     }
 
-
-    let field_opt = matches.opt_str("f").unwrap_or("MF".to_owned());
+    let field_opt = matches.opt_str("f").unwrap_or(Field::MF.string_value().to_owned());
 
     let field = match STRING_FIELD.get(field_opt.as_str()) {
         Some(field) => *field,
@@ -263,8 +266,8 @@ fn find_competition_vf<'a>(graph: &'a DependencyGraph<'a>,
     let lk_idx = try_ok!(adjacent_tokens(graph, p_idx, Direction::Succeeding).find(|idx| {
         let node = &graph[*idx];
 
-        match feature_value(node.token, "tf") {
-            Some(field) => field == "LK",
+        match feature_value(node.token, TOPO_FIELD_FEATURE) {
+            Some(field) => field == TOPO_LK_BRACKET,
             None => false,
         }
     }));
@@ -283,8 +286,8 @@ fn find_competition_vf<'a>(graph: &'a DependencyGraph<'a>,
     };
 
     let vf_tokens = adjacent_tokens(graph, p_idx, Direction::Preceeding).take_while(|idx| {
-        match feature_value(&graph[*idx].token, "tf") {
-            Some(field) => field == "VF" || field == "UK",
+        match feature_value(&graph[*idx].token, TOPO_FIELD_FEATURE) {
+            Some(field) => field == Field::VF.string_value() || field == TOPO_UNKNOWN_FIELD,
             None => false,
         }
     });
@@ -297,8 +300,8 @@ fn find_competition_vf<'a>(graph: &'a DependencyGraph<'a>,
         // Left bracket should not contain any other material...
         let mf_tokens = adjacent_tokens(graph, lk_idx, Direction::Succeeding)
             .take_while(|idx| {
-                match feature_value(&graph[*idx].token, "tf") {
-                    Some(field) => field == "MF" || field == "UK",
+                match feature_value(&graph[*idx].token, TOPO_FIELD_FEATURE) {
+                    Some(field) => field == Field::MF.string_value() || field == TOPO_UNKNOWN_FIELD,
                     None => false,
                 }
             });
@@ -326,8 +329,10 @@ fn find_competition_nf<'a>(graph: &'a DependencyGraph<'a>,
 
         let pos = node.token.pos().unwrap();
 
-        match feature_value(node.token, "tf") {
-            Some(field) => (field == TOPO_RK_FIELD || field == "LK") && pos.starts_with("V"),
+        match feature_value(node.token, TOPO_FIELD_FEATURE) {
+            Some(field) => {
+                (field == TOPO_RK_FIELD || field == TOPO_LK_BRACKET) && pos.starts_with("V")
+            }
             None => false,
         }
     }));
@@ -346,8 +351,8 @@ fn find_competition_nf<'a>(graph: &'a DependencyGraph<'a>,
     };
 
     let nf_tokens = adjacent_tokens(graph, p_idx, Direction::Preceeding).take_while(|idx| {
-        match feature_value(&graph[*idx].token, "tf") {
-            Some(field) => field == "NF" || field == "UK",
+        match feature_value(&graph[*idx].token, TOPO_FIELD_FEATURE) {
+            Some(field) => field == Field::NF.string_value() || field == TOPO_UNKNOWN_FIELD,
             None => false,
         }
     });
@@ -360,8 +365,8 @@ fn find_competition_nf<'a>(graph: &'a DependencyGraph<'a>,
         let lk_idx = try_ok!(adjacent_tokens(graph, p_idx, Direction::Preceeding).find(|idx| {
             let node = &graph[*idx];
 
-            match feature_value(node.token, "tf") {
-                Some(field) => field == TOPO_C_FIELD || field == "LK",
+            match feature_value(node.token, TOPO_FIELD_FEATURE) {
+                Some(field) => field == TOPO_C_FIELD || field == TOPO_LK_BRACKET,
                 None => false,
             }
         }));
@@ -369,8 +374,8 @@ fn find_competition_nf<'a>(graph: &'a DependencyGraph<'a>,
         // Left bracket should not contain any other material...
         let mf_tokens = adjacent_tokens(graph, lk_idx, Direction::Succeeding)
             .take_while(|idx| {
-                match feature_value(&graph[*idx].token, "tf") {
-                    Some(field) => field == "MF" || field == "UK",
+                match feature_value(&graph[*idx].token, TOPO_FIELD_FEATURE) {
+                    Some(field) => field == Field::MF.string_value() || field == TOPO_UNKNOWN_FIELD,
                     None => false,
                 }
             });
@@ -436,7 +441,7 @@ fn find_competition_mf<'a>(graph: &'a DependencyGraph<'a>,
                 // C-feld without a head.
                 return None;
             }
-        } else if tf == "MF" || tf == "UK" {
+        } else if tf == Field::MF.string_value() || tf == TOPO_UNKNOWN_FIELD {
             if relevant_head_tag(pos) {
                 candidates.push(CompetingHead {
                     node: node,
