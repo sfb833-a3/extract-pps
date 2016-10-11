@@ -42,6 +42,12 @@ impl Field {
     }
 }
 
+struct TrainingInstance<'a> {
+    pub prep: NodeIndex,
+    pub prep_obj: NodeIndex,
+    pub candidates: Vec<CompetingHead<'a>>,
+}
+
 static PREP_COMPL_RELATION: &'static str = "PN";
 
 static PP_RELATION: &'static str = "PP";
@@ -102,6 +108,7 @@ fn main() {
     opts.optopt("f", "field", "field to extract from", "FIELD");
     opts.optflag("h", "help", "print this help menu");
     opts.optflag("l", "lemma", "use lemmas instead of forms");
+    opts.optflag("s", "stats", "print dataset statistics");
     let matches = or_exit(opts.parse(&args[1..]));
 
     if matches.opt_present("h") {
@@ -134,6 +141,7 @@ fn main() {
     for sentence in reader.sentences() {
         let sentence = or_exit(sentence);
         let graph = sentence_to_graph(&sentence, false);
+
         print_ambiguous_pps(&mut writer,
                             &graph,
                             matches.opt_present("l"),
@@ -147,6 +155,41 @@ fn print_ambiguous_pps(writer: &mut Write,
                        lemma: bool,
                        all: bool,
                        field: Field) {
+    for instance in extract_ambiguous_pps(graph, all, field) {
+        let prep = graph[instance.prep].token;
+        let prep_obj = graph[instance.prep_obj].token;
+
+        or_exit(write!(writer,
+                       "{} {} {} {}",
+                       ok_or_continue!(extract_form(&prep, lemma)),
+                       ok_or_continue!(prep.pos()),
+                       ok_or_continue!(extract_form(&prep_obj, lemma)),
+                       ok_or_continue!(prep_obj.pos())));
+
+        let ranks = compute_ranks(graph[instance.prep].offset, &instance.candidates);
+
+        for (rank, candidate) in ranks.iter().zip(instance.candidates) {
+            let token = candidate.node.token;
+            or_exit(write!(writer,
+                           " {} {} {} {} {}",
+                           ok_or_continue!(extract_form(&token, lemma)),
+                           ok_or_continue!(token.pos()),
+                           candidate.node.offset as isize - graph[instance.prep].offset as isize,
+                           rank,
+                           if candidate.head { 1 } else { 0 }));
+        }
+
+        or_exit(writeln!(writer, ""));
+    }
+
+}
+
+fn extract_ambiguous_pps<'a>(graph: &'a DependencyGraph<'a>,
+                             all: bool,
+                             field: Field)
+                             -> Vec<TrainingInstance<'a>> {
+    let mut instances = Vec::new();
+
     for edge in graph.raw_edges() {
         // Find PPs in the graph
         if edge.weight != DependencyEdge::Relation(Some(PP_RELATION)) {
@@ -176,14 +219,6 @@ fn print_ambiguous_pps(writer: &mut Write,
                                                              *e == DependencyEdge::Relation(Some(PREP_COMPL_RELATION))
                                                          }));
 
-        let dep_n = graph[pn_rel].token;
-
-        let dep_form = ok_or_continue!(extract_form(pp_node.token, lemma));
-        let dep_n_form = ok_or_continue!(extract_form(dep_n, lemma));
-
-        let dep_pos = ok_or_continue!(pp_node.token.pos());
-        let dep_n_pos = ok_or_continue!(dep_n.pos());
-
         let competition = match field {
             Field::VF => ok_or_continue!(find_competition_vf(graph, edge.target(), edge.source())),                
             Field::MF => ok_or_continue!(find_competition_mf(graph, edge.target(), edge.source())),
@@ -195,30 +230,14 @@ fn print_ambiguous_pps(writer: &mut Write,
             continue;
         }
 
-        // Fixme: we don't want ok_or_contiues in here, or the output should be written
-        //        to a buffer first.
-        or_exit(write!(writer,
-                       "{} {} {} {}",
-                       dep_form,
-                       dep_pos,
-                       dep_n_form,
-                       dep_n_pos));
-
-        let ranks = compute_ranks(pp_node.offset, &competition);
-
-        for (rank, candidate) in ranks.iter().zip(competition) {
-            let token = candidate.node.token;
-            or_exit(write!(writer,
-                           " {} {} {} {} {}",
-                           ok_or_continue!(extract_form(&token, lemma)),
-                           ok_or_continue!(token.pos()),
-                           candidate.node.offset as isize - pp_node.offset as isize,
-                           rank,
-                           if candidate.head { 1 } else { 0 }));
-        }
-
-        or_exit(writeln!(writer, ""));
+        instances.push(TrainingInstance {
+            prep: edge.target(),
+            prep_obj: pn_rel,
+            candidates: competition,
+        });
     }
+
+    instances
 }
 
 fn compute_ranks(p_offset: usize, competition: &Vec<CompetingHead>) -> Vec<isize> {
