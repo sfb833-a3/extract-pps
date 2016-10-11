@@ -15,7 +15,7 @@ extern crate lazy_static;
 
 use std::collections::HashSet;
 use std::collections::HashMap;
-use std::io::Write;
+use std::io::{BufRead, Write};
 use std::process;
 use std::env::args;
 
@@ -90,7 +90,7 @@ fn relevant_head_tag(tag: &str) -> bool {
 
 fn print_usage(program: &str, opts: Options) {
     let brief = format!("Usage: {} [options] [INPUT_FILE] [OUTPUT_FILE]", program);
-    print!("{}", opts.usage(&brief));
+    stderr!("{}", opts.usage(&brief));
 }
 
 fn extract_form(token: &Token, lemma: bool) -> Option<&str> {
@@ -121,16 +121,6 @@ fn main() {
         process::exit(1);
     }
 
-    let field_opt = matches.opt_str("f").unwrap_or(Field::MF.string_value().to_owned());
-
-    let field = match STRING_FIELD.get(field_opt.as_str()) {
-        Some(field) => *field,
-        None => {
-            stderr!("Unknown field");
-            process::exit(1);
-        }
-    };
-
     // Read CoNNL-X from stdin or file.
     let input = or_stdin(matches.free.get(0));
     let reader = conllx::Reader::new(or_exit(input.buf_read()));
@@ -138,6 +128,41 @@ fn main() {
     let output = or_stdout(matches.free.get(1));
     let mut writer = or_exit(output.buf_write());
 
+    if matches.opt_present("s") {
+        print_statistics(reader);
+    } else {
+        print_ambiguous_pps(reader, &mut writer, matches.opt_present("l"), matches.opt_present("a"));
+    }
+
+
+}
+
+fn print_statistics<R>(reader: conllx::Reader<R>) where R: BufRead {
+    let mut n_relevant_tags = 0;
+    let mut n_instances = 0;
+    let mut n_candidate_heads = 0;
+
+    for sentence in reader.sentences() {
+        let sentence = or_exit(sentence);
+        let graph = sentence_to_graph(&sentence, false);
+
+        n_relevant_tags += sentence.iter().filter(|t|
+            t.pos().map(relevant_head_tag).unwrap_or(false)
+        ).count();
+
+        for instance in extract_ambiguous_pps(&graph, false) {
+            n_candidate_heads += instance.candidates.len();
+            n_instances += 1;
+        }
+    }
+
+    println!("Average relevant tags: {}", n_relevant_tags as f64 / n_instances as f64);
+    println!("Average candidate heads: {}", n_candidate_heads as f64 / n_instances as f64);
+}
+
+fn print_ambiguous_pps<R>(reader: conllx::Reader<R>, writer: &mut Write,
+                       lemma: bool,
+                       all: bool) where R: BufRead {
     for sentence in reader.sentences() {
         let sentence = or_exit(sentence);
         let graph = sentence_to_graph(&sentence, false);
@@ -150,7 +175,7 @@ fn main() {
     }
 }
 
-fn print_ambiguous_pps(writer: &mut Write,
+fn print_graph_ambiguous_pps(writer: &mut Write,
                        graph: &DependencyGraph,
                        lemma: bool,
                        all: bool,
@@ -185,8 +210,7 @@ fn print_ambiguous_pps(writer: &mut Write,
 }
 
 fn extract_ambiguous_pps<'a>(graph: &'a DependencyGraph<'a>,
-                             all: bool,
-                             field: Field)
+                             all: bool)
                              -> Vec<TrainingInstance<'a>> {
     let mut instances = Vec::new();
 
@@ -207,10 +231,7 @@ fn extract_ambiguous_pps<'a>(graph: &'a DependencyGraph<'a>,
         let pp_node = &graph[edge.target()];
         let pp_field = ok_or_continue!(feature_value(pp_node.token, TOPO_FIELD_FEATURE));
 
-        if pp_field != field.string_value() {
-            // Skip PPs that are not in the field that we are interested in.
-            continue;
-        }
+        let field = ok_or_continue!(STRING_FIELD.get(pp_field.as_str()));
 
         let pn_rel = ok_or_continue!(first_matching_edge(graph,
                                                          edge.target(),
@@ -219,7 +240,7 @@ fn extract_ambiguous_pps<'a>(graph: &'a DependencyGraph<'a>,
                                                              *e == DependencyEdge::Relation(Some(PREP_COMPL_RELATION))
                                                          }));
 
-        let competition = match field {
+        let competition = match *field {
             Field::VF => ok_or_continue!(find_competition_vf(graph, edge.target(), edge.source())),                
             Field::MF => ok_or_continue!(find_competition_mf(graph, edge.target(), edge.source())),
             Field::NF => ok_or_continue!(find_competition_nf(graph, edge.target(), edge.source())),

@@ -51,7 +51,7 @@ pub fn or_stdout(filename: Option<&String>) -> Output {
 
 pub fn or_exit<T, E: Display>(r: Result<T, E>) -> T {
     r.unwrap_or_else(|e: E| -> T {
-        println!("Error: {}", e);
+        stderr!("Error: {}", e);
         process::exit(1)
     })
 }
