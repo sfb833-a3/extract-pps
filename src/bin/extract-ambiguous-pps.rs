@@ -25,7 +25,7 @@ use getopts::Options;
 use petgraph::EdgeDirection;
 use petgraph::graph::NodeIndex;
 
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy,Eq,Hash,PartialEq)]
 enum Field {
     VF,
     MF,
@@ -121,6 +121,8 @@ fn main() {
         process::exit(1);
     }
 
+    let fields = field_to_set(matches.opt_str("f"));
+
     // Read CoNNL-X from stdin or file.
     let input = or_stdin(matches.free.get(0));
     let reader = conllx::Reader::new(or_exit(input.buf_read()));
@@ -129,15 +131,21 @@ fn main() {
     let mut writer = or_exit(output.buf_write());
 
     if matches.opt_present("s") {
-        print_statistics(reader);
+        print_statistics(reader, &fields);
     } else {
-        print_ambiguous_pps(reader, &mut writer, matches.opt_present("l"), matches.opt_present("a"));
+        print_ambiguous_pps(reader,
+                            &mut writer,
+                            matches.opt_present("l"),
+                            matches.opt_present("a"),
+                            &fields);
     }
 
 
 }
 
-fn print_statistics<R>(reader: conllx::Reader<R>) where R: BufRead {
+fn print_statistics<R>(reader: conllx::Reader<R>, fields: &HashSet<Field>)
+    where R: BufRead
+{
     let mut n_relevant_tags = 0;
     let mut n_instances = 0;
     let mut n_candidate_heads = 0;
@@ -146,41 +154,45 @@ fn print_statistics<R>(reader: conllx::Reader<R>) where R: BufRead {
         let sentence = or_exit(sentence);
         let graph = sentence_to_graph(&sentence, false);
 
-        n_relevant_tags += sentence.iter().filter(|t|
-            t.pos().map(relevant_head_tag).unwrap_or(false)
-        ).count();
+        let n_relevant_tags_sent = sentence.iter()
+            .filter(|t| t.pos().map(relevant_head_tag).unwrap_or(false))
+            .count();
 
-        for instance in extract_ambiguous_pps(&graph, false) {
+        for instance in extract_ambiguous_pps(&graph, false, fields) {
             n_candidate_heads += instance.candidates.len();
+            n_relevant_tags += n_relevant_tags_sent;
             n_instances += 1;
         }
     }
 
-    println!("Average relevant tags: {}", n_relevant_tags as f64 / n_instances as f64);
-    println!("Average candidate heads: {}", n_candidate_heads as f64 / n_instances as f64);
+    println!("Instances: {}", n_instances);
+    println!("Average relevant tags: {:.2}",
+             n_relevant_tags as f64 / n_instances as f64);
+    println!("Average candidate heads: {:.2}",
+             n_candidate_heads as f64 / n_instances as f64);
 }
 
-fn print_ambiguous_pps<R>(reader: conllx::Reader<R>, writer: &mut Write,
-                       lemma: bool,
-                       all: bool) where R: BufRead {
+fn print_ambiguous_pps<R>(reader: conllx::Reader<R>,
+                          writer: &mut Write,
+                          lemma: bool,
+                          all: bool,
+                          fields: &HashSet<Field>)
+    where R: BufRead
+{
     for sentence in reader.sentences() {
         let sentence = or_exit(sentence);
         let graph = sentence_to_graph(&sentence, false);
 
-        print_ambiguous_pps(&mut writer,
-                            &graph,
-                            matches.opt_present("l"),
-                            matches.opt_present("a"),
-                            field)
+        print_graph_ambiguous_pps(writer, &graph, lemma, all, fields)
     }
 }
 
 fn print_graph_ambiguous_pps(writer: &mut Write,
-                       graph: &DependencyGraph,
-                       lemma: bool,
-                       all: bool,
-                       field: Field) {
-    for instance in extract_ambiguous_pps(graph, all, field) {
+                             graph: &DependencyGraph,
+                             lemma: bool,
+                             all: bool,
+                             fields: &HashSet<Field>) {
+    for instance in extract_ambiguous_pps(graph, all, fields) {
         let prep = graph[instance.prep].token;
         let prep_obj = graph[instance.prep_obj].token;
 
@@ -210,7 +222,8 @@ fn print_graph_ambiguous_pps(writer: &mut Write,
 }
 
 fn extract_ambiguous_pps<'a>(graph: &'a DependencyGraph<'a>,
-                             all: bool)
+                             all: bool,
+                             fields: &HashSet<Field>)
                              -> Vec<TrainingInstance<'a>> {
     let mut instances = Vec::new();
 
@@ -229,9 +242,15 @@ fn extract_ambiguous_pps<'a>(graph: &'a DependencyGraph<'a>,
         }
 
         let pp_node = &graph[edge.target()];
+
         let pp_field = ok_or_continue!(feature_value(pp_node.token, TOPO_FIELD_FEATURE));
 
         let field = ok_or_continue!(STRING_FIELD.get(pp_field.as_str()));
+
+        if !fields.contains(field) {
+            // Skip PPs that are not in the fields that we are interested in.
+            continue;
+        }
 
         let pn_rel = ok_or_continue!(first_matching_edge(graph,
                                                          edge.target(),
@@ -524,4 +543,18 @@ fn resolve_verb(graph: &DependencyGraph, verb: NodeIndex) -> NodeIndex {
 
 fn feature_value(token: &Token, feature: &str) -> Option<String> {
     token.features().map(Features::as_map).and_then(|mut f| f.remove(feature)).and_then(|v| v)
+}
+
+fn field_to_set(field_opt: Option<String>) -> HashSet<Field> {
+    if let Some(field) = field_opt {
+        match STRING_FIELD.get(field.as_str()) {
+            Some(field_typed) => hashset!{*field_typed},
+            None => {
+                stderr!("Unknown field: {}", field);
+                process::exit(1);
+            }
+        }
+    } else {
+        hashset!{Field::VF, Field::MF, Field::NF}
+    }
 }
