@@ -197,10 +197,12 @@ fn print_graph_ambiguous_pps(writer: &mut Write,
         let prep_obj = graph[instance.prep_obj].token;
 
         or_exit(write!(writer,
-                       "{} {} {} {}",
+                       "{} {} {} {} {} {}",
                        ok_or_continue!(extract_form(&prep, lemma)),
                        ok_or_continue!(prep.pos()),
+                       ok_or_continue!(feature_value(&prep, "tf")),
                        ok_or_continue!(extract_form(&prep_obj, lemma)),
+                       ok_or_continue!(feature_value(&prep_obj, "tf")),
                        ok_or_continue!(prep_obj.pos())));
 
         let ranks = compute_ranks(graph[instance.prep].offset, &instance.candidates);
@@ -208,9 +210,10 @@ fn print_graph_ambiguous_pps(writer: &mut Write,
         for (rank, candidate) in ranks.iter().zip(instance.candidates) {
             let token = candidate.node.token;
             or_exit(write!(writer,
-                           " {} {} {} {} {}",
+                           " {} {} {} {} {} {}",
                            ok_or_continue!(extract_form(&token, lemma)),
                            ok_or_continue!(token.pos()),
+                           ok_or_continue!(feature_value(&token, "tf")),
                            candidate.node.offset as isize - graph[instance.prep].offset as isize,
                            rank,
                            if candidate.head { 1 } else { 0 }));
