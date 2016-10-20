@@ -202,8 +202,8 @@ fn print_graph_ambiguous_pps(writer: &mut Write,
                        ok_or_continue!(prep.pos()),
                        ok_or_continue!(feature_value(&prep, "tf")),
                        ok_or_continue!(extract_form(&prep_obj, lemma)),
-                       ok_or_continue!(feature_value(&prep_obj, "tf")),
-                       ok_or_continue!(prep_obj.pos())));
+                       ok_or_continue!(prep_obj.pos()),
+                       ok_or_continue!(feature_value(&prep_obj, "tf"))));
 
         let ranks = compute_ranks(graph[instance.prep].offset, &instance.candidates);
 
