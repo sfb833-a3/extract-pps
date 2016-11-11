@@ -179,15 +179,16 @@ fn print_ambiguous_pps<R>(reader: conllx::Reader<R>,
                           fields: &HashSet<Field>)
     where R: BufRead
 {
-    for sentence in reader.sentences() {
+    for (sent_id, sentence) in reader.sentences().enumerate() {
         let sentence = or_exit(sentence);
         let graph = sentence_to_graph(&sentence, false);
 
-        print_graph_ambiguous_pps(writer, &graph, lemma, all, fields)
+        print_graph_ambiguous_pps(writer, sent_id + 1, &graph, lemma, all, fields)
     }
 }
 
 fn print_graph_ambiguous_pps(writer: &mut Write,
+                             sent_id: usize,
                              graph: &DependencyGraph,
                              lemma: bool,
                              all: bool,
@@ -197,7 +198,8 @@ fn print_graph_ambiguous_pps(writer: &mut Write,
         let prep_obj = graph[instance.prep_obj].token;
 
         or_exit(write!(writer,
-                       "{} {} {} {} {} {}",
+                       "{} {} {} {} {} {} {}",
+                       sent_id,
                        ok_or_continue!(extract_form(&prep, lemma)),
                        ok_or_continue!(prep.pos()),
                        ok_or_continue!(feature_value(&prep, "tf")),
