@@ -1,7 +1,7 @@
 extern crate conllx;
 
 #[macro_use]
-extern crate extract_pps;
+extern crate syncooc;
 
 extern crate getopts;
 
@@ -20,7 +20,7 @@ use std::process;
 use std::env::args;
 
 use conllx::{Features, Token};
-use extract_pps::*;
+use syncooc::*;
 use getopts::Options;
 use petgraph::EdgeDirection;
 use petgraph::graph::NodeIndex;
