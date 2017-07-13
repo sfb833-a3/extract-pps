@@ -57,7 +57,7 @@ fn main() {
     let output = or_stdout(matches.free.get(1));
     let mut writer = or_exit(output.buf_write());
 
-    for sentence in reader.sentences() {
+    for sentence in reader {
         let sentence = or_exit(sentence);
         let graph = sentence_to_graph(&sentence, false);
         print_pps(&mut writer, &graph, matches.opt_present("l"))
@@ -110,5 +110,5 @@ fn print_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool) {
 }
 
 fn feature_value(token: &Token, feature: &str) -> Option<String> {
-    token.features().map(Features::as_map).and_then(|mut f| f.remove(feature)).and_then(|v| v)
+    token.features().map(Features::as_map).and_then(|f| f.get(feature)).and_then(|v| v.clone())
 }

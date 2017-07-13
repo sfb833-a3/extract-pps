@@ -53,7 +53,7 @@ fn main() {
     let output = or_stdout(matches.free.get(2));
     let mut writer = or_exit(output.buf_write());
 
-    for sentence in reader.sentences() {
+    for sentence in reader {
         let sentence = or_exit(sentence);
         let graph = sentence_to_graph(&sentence, false);
         print_bilex(&mut writer, &graph, relation, matches.opt_present("l"))

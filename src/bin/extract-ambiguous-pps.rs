@@ -19,7 +19,7 @@ use std::io::{BufRead, Write};
 use std::process;
 use std::env::args;
 
-use conllx::{Features, Token};
+use conllx::{Features, ReadSentence, Token};
 use syncooc::*;
 use getopts::Options;
 use petgraph::EdgeDirection;
@@ -150,7 +150,7 @@ fn print_statistics<R>(reader: conllx::Reader<R>, fields: &HashSet<Field>)
     let mut n_instances = 0;
     let mut n_candidate_heads = 0;
 
-    for sentence in reader.sentences() {
+    for sentence in reader {
         let sentence = or_exit(sentence);
         let graph = sentence_to_graph(&sentence, false);
 
@@ -547,7 +547,7 @@ fn resolve_verb(graph: &DependencyGraph, verb: NodeIndex) -> NodeIndex {
 }
 
 fn feature_value(token: &Token, feature: &str) -> Option<String> {
-    token.features().map(Features::as_map).and_then(|mut f| f.remove(feature)).and_then(|v| v)
+    token.features().map(Features::as_map).and_then(|f| f.get(feature)).and_then(|v| v.clone())
 }
 
 fn field_to_set(field_opt: Option<String>) -> HashSet<Field> {

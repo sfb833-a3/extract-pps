@@ -2,6 +2,7 @@ use conllx::{Sentence, Token};
 
 use petgraph::{Directed, EdgeDirection, Graph};
 use petgraph::graph::NodeIndex;
+use petgraph::visit::EdgeRef;
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum DependencyEdge<'a> {
@@ -65,8 +66,8 @@ pub fn first_matching_edge<F>(graph: &DependencyGraph,
     where F: Fn(&DependencyEdge) -> bool
 {
     graph.edges_directed(index, direction)
-        .find(|&(_, e)| predicate(e))
-        .map(|(idx, _)| idx)
+        .find(|edge_ref| predicate(edge_ref.weight()))
+        .map(|edge_ref| edge_ref.target())
 }
 
 pub enum Direction {
