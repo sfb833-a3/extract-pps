@@ -16,8 +16,10 @@ use syncooc::*;
 use getopts::Options;
 
 fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} [options] REL [INPUT_FILE] [OUTPUT_FILE]",
-                        program);
+    let brief = format!(
+        "Usage: {} [options] REL [INPUT_FILE] [OUTPUT_FILE]",
+        program
+    );
     print!("{}", opts.usage(&brief));
 }
 
@@ -72,12 +74,14 @@ fn print_bilex(writer: &mut Write, graph: &DependencyGraph, relation: &str, lemm
             let head_pos = ok_or_continue!(head.pos());
             let dep_pos = ok_or_continue!(dep.pos());
 
-            or_exit(writeln!(writer,
-                             "{} {} {} {}",
-                             head_form,
-                             head_pos,
-                             dep_form,
-                             dep_pos));
+            or_exit(writeln!(
+                writer,
+                "{} {} {} {}",
+                head_form,
+                head_pos,
+                dep_form,
+                dep_pos
+            ));
         }
     }
 }

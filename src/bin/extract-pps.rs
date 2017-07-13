@@ -76,12 +76,12 @@ fn print_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool) {
                     None => "NONE",
                 };
 
-            let pn_rel = ok_or_continue!(first_matching_edge(graph,
-                                                             edge.target(),
-                                                             EdgeDirection::Outgoing,
-                                                             |e| {
-                                                                 *e == DependencyEdge::Relation(Some(PP_NOUN))
-                                                             }));
+            let pn_rel = ok_or_continue!(first_matching_edge(
+                graph,
+                edge.target(),
+                EdgeDirection::Outgoing,
+                |e| *e == DependencyEdge::Relation(Some(PP_NOUN)),
+            ));
 
             let dep_n = graph[pn_rel].token;
 
@@ -95,20 +95,26 @@ fn print_pps(writer: &mut Write, graph: &DependencyGraph, lemma: bool) {
             let head_field = ok_or_continue!(feature_value(head, TOPO_FIELD_FEATURE));
             let pp_field = ok_or_continue!(feature_value(dep, TOPO_FIELD_FEATURE));
 
-            or_exit(writeln!(writer,
-                             "{} {} {} {} {} {} {} {}",
-                             head_form,
-                             head_pos,
-                             head_field,
-                             dep_form,
-                             dep_pos,
-                             pp_field,
-                             dep_n_form,
-                             preceding_tag));
+            or_exit(writeln!(
+                writer,
+                "{} {} {} {} {} {} {} {}",
+                head_form,
+                head_pos,
+                head_field,
+                dep_form,
+                dep_pos,
+                pp_field,
+                dep_n_form,
+                preceding_tag
+            ));
         }
     }
 }
 
 fn feature_value(token: &Token, feature: &str) -> Option<String> {
-    token.features().map(Features::as_map).and_then(|f| f.get(feature)).and_then(|v| v.clone())
+    token
+        .features()
+        .map(Features::as_map)
+        .and_then(|f| f.get(feature))
+        .and_then(|v| v.clone())
 }

@@ -25,7 +25,7 @@ use getopts::Options;
 use petgraph::EdgeDirection;
 use petgraph::graph::NodeIndex;
 
-#[derive(Clone,Copy,Eq,Hash,PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 enum Field {
     VF,
     MF,
@@ -102,9 +102,11 @@ fn main() {
     let program = args[0].clone();
 
     let mut opts = Options::new();
-    opts.optflag("a",
-                 "all",
-                 "extract all PPs, including PPs with no head competition");
+    opts.optflag(
+        "a",
+        "all",
+        "extract all PPs, including PPs with no head competition",
+    );
     opts.optopt("f", "field", "field to extract from", "FIELD");
     opts.optflag("h", "help", "print this help menu");
     opts.optflag("l", "lemma", "use lemmas instead of forms");
@@ -133,18 +135,21 @@ fn main() {
     if matches.opt_present("s") {
         print_statistics(reader, &fields);
     } else {
-        print_ambiguous_pps(reader,
-                            &mut writer,
-                            matches.opt_present("l"),
-                            matches.opt_present("a"),
-                            &fields);
+        print_ambiguous_pps(
+            reader,
+            &mut writer,
+            matches.opt_present("l"),
+            matches.opt_present("a"),
+            &fields,
+        );
     }
 
 
 }
 
 fn print_statistics<R>(reader: conllx::Reader<R>, fields: &HashSet<Field>)
-    where R: BufRead
+where
+    R: BufRead,
 {
     let mut n_relevant_tags = 0;
     let mut n_instances = 0;
@@ -154,7 +159,8 @@ fn print_statistics<R>(reader: conllx::Reader<R>, fields: &HashSet<Field>)
         let sentence = or_exit(sentence);
         let graph = sentence_to_graph(&sentence, false);
 
-        let n_relevant_tags_sent = sentence.iter()
+        let n_relevant_tags_sent = sentence
+            .iter()
             .filter(|t| t.pos().map(relevant_head_tag).unwrap_or(false))
             .count();
 
@@ -166,18 +172,24 @@ fn print_statistics<R>(reader: conllx::Reader<R>, fields: &HashSet<Field>)
     }
 
     println!("Instances: {}", n_instances);
-    println!("Average relevant tags: {:.2}",
-             n_relevant_tags as f64 / n_instances as f64);
-    println!("Average candidate heads: {:.2}",
-             n_candidate_heads as f64 / n_instances as f64);
+    println!(
+        "Average relevant tags: {:.2}",
+        n_relevant_tags as f64 / n_instances as f64
+    );
+    println!(
+        "Average candidate heads: {:.2}",
+        n_candidate_heads as f64 / n_instances as f64
+    );
 }
 
-fn print_ambiguous_pps<R>(reader: conllx::Reader<R>,
-                          writer: &mut Write,
-                          lemma: bool,
-                          all: bool,
-                          fields: &HashSet<Field>)
-    where R: BufRead
+fn print_ambiguous_pps<R>(
+    reader: conllx::Reader<R>,
+    writer: &mut Write,
+    lemma: bool,
+    all: bool,
+    fields: &HashSet<Field>,
+) where
+    R: BufRead,
 {
     for (sent_id, sentence) in reader.sentences().enumerate() {
         let sentence = or_exit(sentence);
@@ -187,38 +199,45 @@ fn print_ambiguous_pps<R>(reader: conllx::Reader<R>,
     }
 }
 
-fn print_graph_ambiguous_pps(writer: &mut Write,
-                             sent_id: usize,
-                             graph: &DependencyGraph,
-                             lemma: bool,
-                             all: bool,
-                             fields: &HashSet<Field>) {
+fn print_graph_ambiguous_pps(
+    writer: &mut Write,
+    sent_id: usize,
+    graph: &DependencyGraph,
+    lemma: bool,
+    all: bool,
+    fields: &HashSet<Field>,
+) {
     for instance in extract_ambiguous_pps(graph, all, fields) {
         let prep = graph[instance.prep].token;
         let prep_obj = graph[instance.prep_obj].token;
 
-        or_exit(write!(writer,
-                       "{} {} {} {} {} {} {}",
-                       sent_id,
-                       ok_or_continue!(extract_form(&prep, lemma)),
-                       ok_or_continue!(prep.pos()),
-                       ok_or_continue!(feature_value(&prep, "tf")),
-                       ok_or_continue!(extract_form(&prep_obj, lemma)),
-                       ok_or_continue!(prep_obj.pos()),
-                       ok_or_continue!(feature_value(&prep_obj, "tf"))));
+        or_exit(write!(
+            writer,
+            "{} {} {} {} {} {} {}",
+            sent_id,
+            ok_or_continue!(extract_form(&prep, lemma)),
+            ok_or_continue!(prep.pos()),
+            ok_or_continue!(feature_value(&prep, "tf")),
+            ok_or_continue!(extract_form(&prep_obj, lemma)),
+            ok_or_continue!(prep_obj.pos()),
+            ok_or_continue!(feature_value(&prep_obj, "tf"))
+        ));
 
         let ranks = compute_ranks(graph[instance.prep].offset, &instance.candidates);
 
         for (rank, candidate) in ranks.iter().zip(instance.candidates) {
             let token = candidate.node.token;
-            or_exit(write!(writer,
-                           " {} {} {} {} {} {}",
-                           ok_or_continue!(extract_form(&token, lemma)),
-                           ok_or_continue!(token.pos()),
-                           ok_or_continue!(feature_value(&token, "tf")),
-                           candidate.node.offset as isize - graph[instance.prep].offset as isize,
-                           rank,
-                           if candidate.head { 1 } else { 0 }));
+            or_exit(write!(
+                writer,
+                " {} {} {} {} {} {}",
+                ok_or_continue!(extract_form(&token, lemma)),
+                ok_or_continue!(token.pos()),
+                ok_or_continue!(feature_value(&token, "tf")),
+                candidate.node.offset as isize -
+                    graph[instance.prep].offset as isize,
+                rank,
+                if candidate.head { 1 } else { 0 }
+            ));
         }
 
         or_exit(writeln!(writer, ""));
@@ -226,10 +245,11 @@ fn print_graph_ambiguous_pps(writer: &mut Write,
 
 }
 
-fn extract_ambiguous_pps<'a>(graph: &'a DependencyGraph<'a>,
-                             all: bool,
-                             fields: &HashSet<Field>)
-                             -> Vec<TrainingInstance<'a>> {
+fn extract_ambiguous_pps<'a>(
+    graph: &'a DependencyGraph<'a>,
+    all: bool,
+    fields: &HashSet<Field>,
+) -> Vec<TrainingInstance<'a>> {
     let mut instances = Vec::new();
 
     for edge in graph.raw_edges() {
@@ -257,18 +277,27 @@ fn extract_ambiguous_pps<'a>(graph: &'a DependencyGraph<'a>,
             continue;
         }
 
-        let pn_rel = ok_or_continue!(first_matching_edge(graph,
-                                                         edge.target(),
-                                                         EdgeDirection::Outgoing,
-                                                         |e| {
-                                                             *e == DependencyEdge::Relation(Some(PREP_COMPL_RELATION))
-                                                         }));
+        let pn_rel = ok_or_continue!(first_matching_edge(
+            graph,
+            edge.target(),
+            EdgeDirection::Outgoing,
+            |e| {
+                *e == DependencyEdge::Relation(Some(PREP_COMPL_RELATION))
+            },
+        ));
 
-        let competition = match *field {
-            Field::VF => ok_or_continue!(find_competition_vf(graph, edge.target(), edge.source())),                
-            Field::MF => ok_or_continue!(find_competition_mf(graph, edge.target(), edge.source())),
-            Field::NF => ok_or_continue!(find_competition_nf(graph, edge.target(), edge.source())),
-        };
+        let competition =
+            match *field {
+                Field::VF => {
+                    ok_or_continue!(find_competition_vf(graph, edge.target(), edge.source()))
+                }                
+                Field::MF => {
+                    ok_or_continue!(find_competition_mf(graph, edge.target(), edge.source()))
+                }
+                Field::NF => {
+                    ok_or_continue!(find_competition_nf(graph, edge.target(), edge.source()))
+                }
+            };
 
         // Don't print when there is no ambiguity.
         if !competition.iter().any(|x| x.head) || (!all && competition.len() == 1) {
@@ -288,13 +317,21 @@ fn extract_ambiguous_pps<'a>(graph: &'a DependencyGraph<'a>,
 fn compute_ranks(p_offset: usize, competition: &Vec<CompetingHead>) -> Vec<isize> {
     let indices: Vec<_> = (0..competition.len()).collect();
 
-    let mut before: Vec<_> =
-        indices.iter().filter(|&idx| competition[*idx].node.offset < p_offset).collect();
-    before.sort_by(|&a, &b| Ord::cmp(&competition[*b].node.offset, &competition[*a].node.offset));
+    let mut before: Vec<_> = indices
+        .iter()
+        .filter(|&idx| competition[*idx].node.offset < p_offset)
+        .collect();
+    before.sort_by(|&a, &b| {
+        Ord::cmp(&competition[*b].node.offset, &competition[*a].node.offset)
+    });
 
-    let mut after: Vec<_> =
-        indices.iter().filter(|&idx| competition[*idx].node.offset > p_offset).collect();
-    after.sort_by(|&a, &b| Ord::cmp(&competition[*a].node.offset, &competition[*b].node.offset));
+    let mut after: Vec<_> = indices
+        .iter()
+        .filter(|&idx| competition[*idx].node.offset > p_offset)
+        .collect();
+    after.sort_by(|&a, &b| {
+        Ord::cmp(&competition[*a].node.offset, &competition[*b].node.offset)
+    });
 
     let mut ranks = vec![0; competition.len()];
 
@@ -315,10 +352,11 @@ struct CompetingHead<'a> {
     head: bool,
 }
 
-fn find_competition_vf<'a>(graph: &'a DependencyGraph<'a>,
-                           p_idx: NodeIndex,
-                           head_idx: NodeIndex)
-                           -> Option<Vec<CompetingHead>> {
+fn find_competition_vf<'a>(
+    graph: &'a DependencyGraph<'a>,
+    p_idx: NodeIndex,
+    head_idx: NodeIndex,
+) -> Option<Vec<CompetingHead>> {
     let mut candidates = Vec::new();
 
     // Exclude cases where the head is left of the PP.
@@ -327,21 +365,25 @@ fn find_competition_vf<'a>(graph: &'a DependencyGraph<'a>,
     // }
 
     // Find left bracket
-    let lk_idx = try_ok!(adjacent_tokens(graph, p_idx, Direction::Succeeding).find(|idx| {
-        let node = &graph[*idx];
+    let lk_idx = try_ok!(adjacent_tokens(graph, p_idx, Direction::Succeeding).find(
+        |idx| {
+            let node = &graph[*idx];
 
-        match feature_value(node.token, TOPO_FIELD_FEATURE) {
-            Some(field) => field == TOPO_LK_BRACKET,
-            None => false,
-        }
-    }));
+            match feature_value(node.token, TOPO_FIELD_FEATURE) {
+                Some(field) => field == TOPO_LK_BRACKET,
+                None => false,
+            }
+        },
+    ));
 
     let verb_idx = resolve_verb(graph, lk_idx);
 
     candidates.push(CompetingHead {
         node: &graph[verb_idx],
         head: verb_idx == head_idx ||
-              ancestor_tokens(graph, verb_idx).find(|idx| *idx == head_idx).is_some(),
+            ancestor_tokens(graph, verb_idx)
+                .find(|idx| *idx == head_idx)
+                .is_some(),
     });
 
     let preceding_is_noun = match adjacent_tokens(graph, p_idx, Direction::Preceeding).next() {
@@ -362,13 +404,12 @@ fn find_competition_vf<'a>(graph: &'a DependencyGraph<'a>,
     // Only add MF tokens when the preceding token is not a noun...
     if !preceding_is_noun {
         // Left bracket should not contain any other material...
-        let mf_tokens = adjacent_tokens(graph, lk_idx, Direction::Succeeding)
-            .take_while(|idx| {
-                match feature_value(&graph[*idx].token, TOPO_FIELD_FEATURE) {
-                    Some(field) => field == Field::MF.string_value() || field == TOPO_UNKNOWN_FIELD,
-                    None => false,
-                }
-            });
+        let mf_tokens = adjacent_tokens(graph, lk_idx, Direction::Succeeding).take_while(|idx| {
+            match feature_value(&graph[*idx].token, TOPO_FIELD_FEATURE) {
+                Some(field) => field == Field::MF.string_value() || field == TOPO_UNKNOWN_FIELD,
+                None => false,
+            }
+        });
 
         add_tokens(graph, head_idx, mf_tokens, &mut candidates);
     }
@@ -376,10 +417,11 @@ fn find_competition_vf<'a>(graph: &'a DependencyGraph<'a>,
     Some(candidates)
 }
 
-fn find_competition_nf<'a>(graph: &'a DependencyGraph<'a>,
-                           p_idx: NodeIndex,
-                           head_idx: NodeIndex)
-                           -> Option<Vec<CompetingHead>> {
+fn find_competition_nf<'a>(
+    graph: &'a DependencyGraph<'a>,
+    p_idx: NodeIndex,
+    head_idx: NodeIndex,
+) -> Option<Vec<CompetingHead>> {
     let mut candidates = Vec::new();
 
     // Exclude cases where the head is left of the PP.
@@ -388,25 +430,29 @@ fn find_competition_nf<'a>(graph: &'a DependencyGraph<'a>,
     // }
 
     // Find a bracket
-    let bracket_idx = try_ok!(adjacent_tokens(graph, p_idx, Direction::Preceeding).find(|idx| {
-        let node = &graph[*idx];
+    let bracket_idx = try_ok!(adjacent_tokens(graph, p_idx, Direction::Preceeding).find(
+        |idx| {
+            let node = &graph[*idx];
 
-        let pos = node.token.pos().unwrap();
+            let pos = node.token.pos().unwrap();
 
-        match feature_value(node.token, TOPO_FIELD_FEATURE) {
-            Some(field) => {
-                (field == TOPO_RK_FIELD || field == TOPO_LK_BRACKET) && pos.starts_with("V")
+            match feature_value(node.token, TOPO_FIELD_FEATURE) {
+                Some(field) => {
+                    (field == TOPO_RK_FIELD || field == TOPO_LK_BRACKET) && pos.starts_with("V")
+                }
+                None => false,
             }
-            None => false,
-        }
-    }));
+        },
+    ));
 
     let verb_idx = resolve_verb(graph, bracket_idx);
 
     candidates.push(CompetingHead {
         node: &graph[verb_idx],
         head: verb_idx == head_idx ||
-              ancestor_tokens(graph, verb_idx).find(|idx| *idx == head_idx).is_some(),
+            ancestor_tokens(graph, verb_idx)
+                .find(|idx| *idx == head_idx)
+                .is_some(),
     });
 
     let preceding_is_noun = match adjacent_tokens(graph, p_idx, Direction::Preceeding).next() {
@@ -426,23 +472,24 @@ fn find_competition_nf<'a>(graph: &'a DependencyGraph<'a>,
 
     // Only add MF tokens when the preceding token is not a noun...
     if !preceding_is_noun {
-        let lk_idx = try_ok!(adjacent_tokens(graph, p_idx, Direction::Preceeding).find(|idx| {
-            let node = &graph[*idx];
+        let lk_idx = try_ok!(adjacent_tokens(graph, p_idx, Direction::Preceeding).find(
+            |idx| {
+                let node = &graph[*idx];
 
-            match feature_value(node.token, TOPO_FIELD_FEATURE) {
-                Some(field) => field == TOPO_C_FIELD || field == TOPO_LK_BRACKET,
-                None => false,
-            }
-        }));
-
-        // Left bracket should not contain any other material...
-        let mf_tokens = adjacent_tokens(graph, lk_idx, Direction::Succeeding)
-            .take_while(|idx| {
-                match feature_value(&graph[*idx].token, TOPO_FIELD_FEATURE) {
-                    Some(field) => field == Field::MF.string_value() || field == TOPO_UNKNOWN_FIELD,
+                match feature_value(node.token, TOPO_FIELD_FEATURE) {
+                    Some(field) => field == TOPO_C_FIELD || field == TOPO_LK_BRACKET,
                     None => false,
                 }
-            });
+            },
+        ));
+
+        // Left bracket should not contain any other material...
+        let mf_tokens = adjacent_tokens(graph, lk_idx, Direction::Succeeding).take_while(|idx| {
+            match feature_value(&graph[*idx].token, TOPO_FIELD_FEATURE) {
+                Some(field) => field == Field::MF.string_value() || field == TOPO_UNKNOWN_FIELD,
+                None => false,
+            }
+        });
 
         add_tokens(graph, head_idx, mf_tokens, &mut candidates);
     }
@@ -450,11 +497,13 @@ fn find_competition_nf<'a>(graph: &'a DependencyGraph<'a>,
     Some(candidates)
 }
 
-fn add_tokens<'a, I>(graph: &'a DependencyGraph<'a>,
-                     head_idx: NodeIndex,
-                     tokens: I,
-                     candidates: &mut Vec<CompetingHead<'a>>)
-    where I: Iterator<Item = NodeIndex>
+fn add_tokens<'a, I>(
+    graph: &'a DependencyGraph<'a>,
+    head_idx: NodeIndex,
+    tokens: I,
+    candidates: &mut Vec<CompetingHead<'a>>,
+) where
+    I: Iterator<Item = NodeIndex>,
 {
     for idx in tokens {
         let node = &graph[idx];
@@ -469,10 +518,11 @@ fn add_tokens<'a, I>(graph: &'a DependencyGraph<'a>,
     }
 }
 
-fn find_competition_mf<'a>(graph: &'a DependencyGraph<'a>,
-                           p_idx: NodeIndex,
-                           head_idx: NodeIndex)
-                           -> Option<Vec<CompetingHead>> {
+fn find_competition_mf<'a>(
+    graph: &'a DependencyGraph<'a>,
+    p_idx: NodeIndex,
+    head_idx: NodeIndex,
+) -> Option<Vec<CompetingHead>> {
     let mut candidates = Vec::new();
 
     for idx in adjacent_tokens(graph, p_idx, Direction::Preceeding) {
@@ -537,17 +587,20 @@ fn traverse_c_to_vc(graph: &DependencyGraph, idx: NodeIndex) -> Option<NodeIndex
 
 fn resolve_verb(graph: &DependencyGraph, verb: NodeIndex) -> NodeIndex {
     // Look for non-aux.
-    match first_matching_edge(graph,
-                              verb,
-                              EdgeDirection::Outgoing,
-                              |e| *e == DependencyEdge::Relation(Some(AUXILIARY_RELATION))) {
+    match first_matching_edge(graph, verb, EdgeDirection::Outgoing, |e| {
+        *e == DependencyEdge::Relation(Some(AUXILIARY_RELATION))
+    }) {
         Some(idx) => resolve_verb(graph, idx),
         None => verb,
     }
 }
 
 fn feature_value(token: &Token, feature: &str) -> Option<String> {
-    token.features().map(Features::as_map).and_then(|f| f.get(feature)).and_then(|v| v.clone())
+    token
+        .features()
+        .map(Features::as_map)
+        .and_then(|f| f.get(feature))
+        .and_then(|v| v.clone())
 }
 
 fn field_to_set(field_opt: Option<String>) -> HashSet<Field> {

@@ -21,7 +21,8 @@ pub type DependencyGraph<'a> = Graph<DependencyNode<'a>, DependencyEdge<'a>, Dir
 pub fn sentence_to_graph(sentence: &Sentence, projective: bool) -> DependencyGraph {
     let mut g = Graph::new();
 
-    let nodes: Vec<_> = sentence.iter()
+    let nodes: Vec<_> = sentence
+        .iter()
         .enumerate()
         .map(|(offset, token)| {
             g.add_node(DependencyNode {
@@ -58,14 +59,17 @@ pub fn sentence_to_graph(sentence: &Sentence, projective: bool) -> DependencyGra
     g
 }
 
-pub fn first_matching_edge<F>(graph: &DependencyGraph,
-                              index: NodeIndex,
-                              direction: EdgeDirection,
-                              predicate: F)
-                              -> Option<NodeIndex>
-    where F: Fn(&DependencyEdge) -> bool
+pub fn first_matching_edge<F>(
+    graph: &DependencyGraph,
+    index: NodeIndex,
+    direction: EdgeDirection,
+    predicate: F,
+) -> Option<NodeIndex>
+where
+    F: Fn(&DependencyEdge) -> bool,
 {
-    graph.edges_directed(index, direction)
+    graph
+        .edges_directed(index, direction)
         .find(|edge_ref| predicate(edge_ref.weight()))
         .map(|edge_ref| edge_ref.target())
 }
@@ -75,10 +79,11 @@ pub enum Direction {
     Succeeding,
 }
 
-pub fn adjacent_tokens<'a>(graph: &'a DependencyGraph<'a>,
-                           index: NodeIndex,
-                           direction: Direction)
-                           -> AdjacentTokens<'a> {
+pub fn adjacent_tokens<'a>(
+    graph: &'a DependencyGraph<'a>,
+    index: NodeIndex,
+    direction: Direction,
+) -> AdjacentTokens<'a> {
     AdjacentTokens {
         graph: graph,
         current: index,
@@ -101,10 +106,9 @@ impl<'a> Iterator for AdjacentTokens<'a> {
             Direction::Succeeding => EdgeDirection::Outgoing,
         };
 
-        match first_matching_edge(self.graph,
-                                  self.current,
-                                  direction,
-                                  |e| *e == DependencyEdge::Precedence) {
+        match first_matching_edge(self.graph, self.current, direction, |e| {
+            *e == DependencyEdge::Precedence
+        }) {
             Some(idx) => {
                 self.current = idx;
                 Some(idx)
@@ -130,10 +134,12 @@ impl<'a> Iterator for AncestorTokens<'a> {
     type Item = NodeIndex;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match first_matching_edge(self.graph,
-                                  self.current,
-                                  EdgeDirection::Incoming,
-                                  is_relation) {
+        match first_matching_edge(
+            self.graph,
+            self.current,
+            EdgeDirection::Incoming,
+            is_relation,
+        ) {
             Some(idx) => {
                 self.current = idx;
                 Some(idx)
